@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'home_screen.dart';
 
 class LockScreen extends StatefulWidget {
-  const LockScreen({super.key});
+  final VoidCallback onAuthenticated;
+
+  const LockScreen({super.key, required this.onAuthenticated});
 
   @override
   State<LockScreen> createState() => _LockScreenState();
@@ -30,15 +31,14 @@ class _LockScreenState extends State<LockScreen> {
       // Navigate anyway for testing
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-          );
+          widget.onAuthenticated();
         }
       });
     }
   }
 
   Future<void> _authenticate() async {
+    print('Starting authentication...');
     setState(() {
       _isAuthenticating = true;
       _message = 'Authenticating...';
@@ -49,19 +49,21 @@ class _LockScreenState extends State<LockScreen> {
         reason: 'Unlock your password vault',
       );
 
+      print('Authentication result: $authenticated');
       if (!mounted) return;
 
       if (authenticated) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+        print('Calling onAuthenticated callback');
+        widget.onAuthenticated();
       } else {
+        print('Authentication failed');
         setState(() {
           _isAuthenticating = false;
           _message = 'Authentication failed. Please try again.';
         });
       }
     } catch (e) {
+      print('Authentication error: $e');
       if (!mounted) return;
       setState(() {
         _isAuthenticating = false;

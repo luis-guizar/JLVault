@@ -5,7 +5,9 @@ import '../widgets/account_title.dart';
 import 'add_edit_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onLogout;
+
+  const HomeScreen({super.key, this.onLogout});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -92,6 +94,13 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('JL Vault'),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.lock_outline),
+            onPressed: () {
+              widget.onLogout?.call();
+            },
+            tooltip: 'Lock App',
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () {
