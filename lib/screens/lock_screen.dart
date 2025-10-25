@@ -38,7 +38,6 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _authenticate() async {
-    print('Starting authentication...');
     setState(() {
       _isAuthenticating = true;
       _message = 'Authenticating...';
@@ -49,21 +48,17 @@ class _LockScreenState extends State<LockScreen> {
         reason: 'Unlock your password vault',
       );
 
-      print('Authentication result: $authenticated');
       if (!mounted) return;
 
       if (authenticated) {
-        print('Calling onAuthenticated callback');
         widget.onAuthenticated();
       } else {
-        print('Authentication failed');
         setState(() {
           _isAuthenticating = false;
           _message = 'Authentication failed. Please try again.';
         });
       }
     } catch (e) {
-      print('Authentication error: $e');
       if (!mounted) return;
       setState(() {
         _isAuthenticating = false;

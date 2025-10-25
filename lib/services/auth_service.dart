@@ -43,12 +43,9 @@ class AuthService {
         biometricOnly: false,
         persistAcrossBackgrounding: true,
       );
-    } on PlatformException catch (e) {
+    } on PlatformException catch (_) {
       // Handle platform errors
-      print('PlatformException: ${e.message}');
-    } catch (e) {
-      print('Unexpected error: $e');
-    }
+    } catch (_) {}
     return authenticated;
   }
 
@@ -63,11 +60,8 @@ class AuthService {
         biometricOnly: true,
         persistAcrossBackgrounding: true,
       );
-    } on PlatformException catch (e) {
-      print('PlatformException: ${e.message}');
-    } catch (e) {
-      print('Unexpected error: $e');
-    }
+    } on PlatformException catch (_) {
+    } catch (_) {}
     return authenticated;
   }
 
@@ -75,8 +69,6 @@ class AuthService {
   static Future<void> cancelAuthentication() async {
     try {
       await _auth.stopAuthentication();
-    } catch (e) {
-      print('Error stopping authentication: $e');
-    }
+    } catch (_) {}
   }
 }

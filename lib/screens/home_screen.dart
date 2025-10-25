@@ -189,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navigateToAddEdit(),
         icon: const Icon(Icons.add),
-        label: const Text('Add Account'),
+        label: const Text('Agregar Cuenta'),
       ),
     );
   }

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/account.dart';
 import '../data/db_helper.dart';
 import '../services/encryption_service.dart';
+import '../services/password_generator_service.dart';
+import '../widgets/password_generator_dialog.dart';
+import '../widgets/password_strength_indicator.dart';
 
 class AddEditScreen extends StatefulWidget {
   final Account? account;
@@ -19,6 +22,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String _passwordStrength = 'Débil';
 
   bool get _isEditing => widget.account != null;
 
@@ -27,6 +31,16 @@ class _AddEditScreenState extends State<AddEditScreen> {
     super.initState();
     if (_isEditing) {
       _loadAccountData();
+    }
+    _passwordController.addListener(_updatePasswordStrength);
+  }
+
+  void _updatePasswordStrength() {
+    final newStrength = _checkPasswordStrength(_passwordController.text);
+    if (_passwordStrength != newStrength) {
+      setState(() {
+        _passwordStrength = newStrength;
+      });
     }
   }
 
@@ -48,7 +62,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
       final encrypted = await EncryptionService.encryptText(
         _passwordController.text,
       );
-
       final account = Account(
         id: widget.account?.id,
         name: _nameController.text.trim(),
@@ -61,15 +74,14 @@ class _AddEditScreenState extends State<AddEditScreen> {
       } else {
         await DBHelper.insert(account);
       }
-
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               _isEditing
-                  ? 'Account updated successfully'
-                  : 'Account added successfully',
+                  ? 'Cuenta Actualizada Correctamente'
+                  : 'Cuenta Agregada Correctamente',
             ),
           ),
         );
@@ -87,16 +99,79 @@ class _AddEditScreenState extends State<AddEditScreen> {
     }
   }
 
-  void _generatePassword() {
-    const chars =
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*';
-    final random = List.generate(
-      16,
-      (index) =>
-          chars[(DateTime.now().microsecondsSinceEpoch + index) % chars.length],
-    ).join();
-    _passwordController.text = random;
+  Future<void> _showPasswordGenerator() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) =>
+          PasswordGeneratorDialog(initialPassword: _passwordController.text),
+    );
+
+    if (result != null) {
+      _passwordController.text = result;
+      setState(() {});
+    }
+  }
+
+  void _generateQuickPassword() {
+    // Quick generation with default options for the refresh button
+    const options = PasswordGenerationOptions(length: 16);
+    final password = PasswordGeneratorService.generatePassword(options);
+    _passwordController.text = password;
     setState(() {});
+  }
+
+  // This function will return 0 for weak, 1 for modarate and 2 for strong
+
+  String _checkPasswordStrength(String password) {
+    int score = 0;
+    final String lowerPassword = password
+        .toLowerCase(); // For case-insensitive checks
+
+    // --- 1. Length Bonus ---
+    int length = password.length;
+    if (length >= 16) {
+      score += 4; // Very strong length
+    } else if (length >= 12) {
+      score += 2; // Strong length
+    } else if (length >= 8) {
+      score += 1; // Minimum acceptable length
+    }
+
+    // --- 2. Character Variety Bonus ---
+    bool hasUpper = password.contains(RegExp(r'[A-Z]'));
+    bool hasLower = password.contains(RegExp(r'[a-z]'));
+    bool hasDigit = password.contains(RegExp(r'[0-9]'));
+    bool hasSpecial = password.contains(RegExp(r'[^A-Za-z0-9]'));
+
+    // Award points only if the character type is present
+    score += [hasUpper, hasLower, hasDigit, hasSpecial].where((e) => e).length;
+
+    // --- 3. Penalties (Using lowerPassword for case-insensitivity) ---
+
+    // Single check for "password"
+    if (lowerPassword.contains("password")) {
+      score -= 2;
+    }
+
+    // Check for common sequential/repetitive patterns
+    if (lowerPassword.contains("abc") ||
+        lowerPassword.contains('123') ||
+        lowerPassword.contains("qwer") || // Added common keyboard sequence
+        lowerPassword.contains(
+          RegExp(r'(.)\1\1'),
+        ) // Added penalty for 3+ repetitions (e.g., aaa, 111)
+        ) {
+      score -= 1;
+    }
+
+    // --- 4. Return Strength Rating ---
+    if (score >= 6) {
+      return "Fuerte";
+    } else if (score >= 3) {
+      return "Moderada";
+    } else {
+      return 'Débil';
+    }
   }
 
   @override
@@ -104,7 +179,28 @@ class _AddEditScreenState extends State<AddEditScreen> {
     _nameController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _passwordController.removeListener(_updatePasswordStrength);
     super.dispose();
+  }
+
+  Map<String, dynamic> _getStrengthStatus() {
+    switch (_passwordStrength) {
+      case 'Fuerte':
+        return {'color': Colors.green, 'value': 1.0};
+      case 'Moderada':
+        return {'color': Colors.orange, 'value': 0.66};
+      case 'Débil':
+      default:
+        // We check if the password field is completely empty to show 'No password' state
+        if (_passwordController.text.isEmpty) {
+          return {
+            'color': Colors.grey,
+            'value': 0.0,
+            'text': 'Ingresa una contraseña',
+          };
+        }
+        return {'color': Colors.red, 'value': 0.33};
+    }
   }
 
   @override
@@ -127,7 +223,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
-                        labelText: 'Account Name',
+                        labelText: 'Nombre de la cuenta',
                         hintText: 'e.g., Google, Facebook, Bank',
                         prefixIcon: const Icon(Icons.label_outline),
                         border: OutlineInputBorder(
@@ -136,7 +232,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter an account name';
+                          return 'Por favor ingresa un nombre de cuenta';
                         }
                         return null;
                       },
@@ -160,52 +256,71 @@ class _AddEditScreenState extends State<AddEditScreen> {
                       },
                     ),
                     const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          onChanged: (_) => setState(
+                            () {},
+                          ), // Trigger rebuild for strength indicator
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.refresh),
-                              onPressed: _generatePassword,
-                              tooltip: 'Generate password',
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                  tooltip: 'Mostrar/Ocultar contraseña',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.refresh),
+                                  onPressed: _generateQuickPassword,
+                                  tooltip: 'Generar rápido',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.tune),
+                                  onPressed: _showPasswordGenerator,
+                                  tooltip: 'Generador avanzado',
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Por favor, ingresa una contraseña';
+                            }
+                            return null;
+                          },
                         ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a password';
-                        }
-                        return null;
-                      },
+                        if (_passwordController.text.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          PasswordStrengthIndicator(
+                            password: _passwordController.text,
+                            showDetails: true,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 30),
                     ElevatedButton.icon(
                       onPressed: _saveAccount,
                       icon: const Icon(Icons.save),
-                      label: Text(
-                        _isEditing ? 'Update Account' : 'Save Account',
-                      ),
+                      label: Text(_isEditing ? 'Actualizar' : 'Guardar'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         textStyle: const TextStyle(fontSize: 16),

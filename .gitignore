@@ -25,3 +25,6 @@ doc/api/
 
 .flutter-plugins
 .flutter-plugins-dependencies
+PLAY_STORE_DEPLOYMENT_GUIDE.md
+ROADMAP_IMPROVEMENTS.md
+cleanup_for_production.md

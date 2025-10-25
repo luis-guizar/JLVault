@@ -33,19 +33,12 @@ class _PasswordManagerAppState extends State<PasswordManagerApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    print('App lifecycle state: $state, isAuthenticated: $_isAuthenticated');
-
     switch (state) {
       case AppLifecycleState.paused:
         // App is going to background - record the time
         _lastBackgroundTime = DateTime.now();
-        print('App paused at: $_lastBackgroundTime');
         break;
       case AppLifecycleState.resumed:
-        // App is coming back to foreground
-        print(
-          'App resumed, was authenticated: $_isAuthenticated, last background: $_lastBackgroundTime',
-        );
         if (_isAuthenticated && _lastBackgroundTime != null) {
           // Check if authentication just happened (within last 5 seconds)
           final now = DateTime.now();
@@ -54,30 +47,22 @@ class _PasswordManagerAppState extends State<PasswordManagerApp>
               now.difference(_lastAuthenticationTime!).inSeconds < 5;
 
           if (!justAuthenticated) {
-            // If user was authenticated and app was backgrounded, require re-auth
-            print('Requiring re-authentication');
             setState(() {
               _isAuthenticated = false;
             });
-          } else {
-            print('Skipping re-auth because user just authenticated');
-          }
+          } else {}
         }
         break;
       case AppLifecycleState.inactive:
-        print('App inactive');
         break;
       case AppLifecycleState.detached:
-        print('App detached');
         break;
       case AppLifecycleState.hidden:
-        print('App hidden');
         break;
     }
   }
 
   void _onAuthenticated() {
-    print('Authentication successful, setting _isAuthenticated = true');
     _lastAuthenticationTime = DateTime.now();
     setState(() {
       _isAuthenticated = true;
