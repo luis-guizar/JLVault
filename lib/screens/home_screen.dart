@@ -13,11 +13,14 @@ import '../services/crypto_test_service.dart';
 import '../services/theme_service.dart';
 import '../services/feature_gate_factory.dart';
 import '../services/license_manager_factory.dart';
+
 import '../utils/vault_icons.dart';
 import '../widgets/account_title.dart';
 import '../widgets/vault_switcher.dart';
 import '../widgets/feature_gate_wrapper.dart';
 import '../widgets/upgrade_prompt_dialog.dart';
+import '../widgets/translated_text.dart';
+import '../widgets/language_switcher.dart';
 
 import 'add_edit_screen.dart';
 import 'vault_management_screen.dart';
@@ -150,18 +153,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar cuenta'),
-        content: Text(
-          '¿Estás seguro que deseas eliminar la cuenta "${account.name}"?',
-        ),
+        title: const TranslatedText('deleteAccount'),
+        content: Text('${'confirmDelete'.tr} "${account.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: const TranslatedText('cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+            child: const TranslatedText(
+              'delete',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -173,9 +177,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _loadAccounts();
       }
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${account.name} eliminada')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${account.name} ${'itemDeleted'.tr}')),
+        );
       }
     }
   }
@@ -366,17 +370,15 @@ class _HomeScreenState extends State<HomeScreen> {
             color: Colors.grey,
           ),
           const SizedBox(height: 20),
-          Text(
-            _searchQuery.isEmpty
-                ? 'Sin cuentas aún'
-                : 'No se encontraron cuentas',
+          TranslatedText(
+            _searchQuery.isEmpty ? 'noAccountsFound' : 'noAccountsFound',
             style: const TextStyle(fontSize: 20, color: Colors.grey),
           ),
           const SizedBox(height: 10),
           if (_searchQuery.isEmpty)
-            const Text(
-              'Toca + para agregar la primera cuenta',
-              style: TextStyle(color: Colors.grey),
+            TranslatedText(
+              'addAccount',
+              style: const TextStyle(color: Colors.grey),
             ),
         ],
       ),
@@ -478,7 +480,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 IconButton(
                   icon: const Icon(Icons.folder_open),
                   onPressed: _navigateToVaultManagement,
-                  tooltip: 'Gestionar bóvedas',
+                  tooltip: 'vaultManagement'.tr,
                 ),
                 // Lock app - important security action
                 IconButton(
@@ -486,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: () {
                     widget.onLogout?.call();
                   },
-                  tooltip: 'Bloquear aplicación',
+                  tooltip: 'lockApp'.tr,
                 ),
                 // Overflow menu for less common actions with proper constraints
                 PopupMenuButton<String>(
@@ -497,25 +499,31 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   onSelected: (value) {
                     switch (value) {
+                      case 'language':
+                        // Language switching is handled by the LanguageSwitcher widget
+                        break;
                       case 'test_crypto':
                         _testPlatformCrypto();
                         break;
                       case 'about':
                         showAboutDialog(
                           context: context,
-                          applicationName: 'Simple Vault',
+                          applicationName: 'appTitle'.tr,
                           applicationVersion: '1.0.0',
                           applicationIcon: const Icon(Icons.lock, size: 48),
-                          children: [
-                            const Text(
-                              'Un gestor de contraseñas seguro y offline que almacena tus credenciales localmente con cifrado.',
-                            ),
-                          ],
+                          children: [TranslatedText('appDescription')],
                         );
                         break;
                     }
                   },
                   itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'language',
+                      child: LanguageSwitcher(
+                        showLabel: false,
+                        isCompact: false,
+                      ),
+                    ),
                     const PopupMenuItem(
                       value: 'test_crypto',
                       child: Row(
@@ -532,16 +540,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'about',
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.info_outline),
-                          SizedBox(width: 8),
+                          const Icon(Icons.info_outline),
+                          const SizedBox(width: 8),
                           Flexible(
                             child: Text(
-                              'Acerca de',
+                              'about'.tr,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -561,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value),
               decoration: InputDecoration(
-                hintText: 'Buscar...',
+                hintText: 'search'.tr,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -596,7 +604,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? () => _navigateToAddEdit()
                 : _showPasswordLimitDialog,
             icon: const Icon(Icons.add),
-            label: Text(canAddMore ? 'Agregar Cuenta' : 'Límite Alcanzado'),
+            label: Text(canAddMore ? 'addAccount'.tr : 'passwordLimit'.tr),
             backgroundColor: canAddMore ? null : Colors.orange,
           );
         },

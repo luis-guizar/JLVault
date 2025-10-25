@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
 import '../utils/vault_icons.dart';
 
+import 'translated_text.dart';
+
 /// A list tile widget for displaying vault information
 class VaultListTile extends StatelessWidget {
   final VaultMetadata vault;
@@ -141,7 +143,7 @@ class VaultListTile extends StatelessWidget {
                 children: [
                   Icon(Icons.edit, size: 18),
                   SizedBox(width: 8),
-                  Text('Edit'),
+                  TranslatedText('edit'),
                 ],
               ),
             ),
@@ -151,7 +153,7 @@ class VaultListTile extends StatelessWidget {
                 children: [
                   Icon(Icons.delete, size: 18, color: Colors.red),
                   SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: Colors.red)),
+                  TranslatedText('delete', style: TextStyle(color: Colors.red)),
                 ],
               ),
             ),
@@ -179,7 +181,7 @@ class VaultListTile extends StatelessWidget {
     } else if (difference.inMinutes > 0) {
       return '${difference.inMinutes}m ago';
     } else {
-      return 'Just now';
+      return 'justNow'.tr;
     }
   }
 }

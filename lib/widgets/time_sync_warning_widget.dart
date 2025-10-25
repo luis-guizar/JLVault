@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/time_sync_service.dart';
 
+import 'translated_text.dart';
+
 /// Widget that displays time synchronization warnings
 class TimeSyncWarningWidget extends StatefulWidget {
   final bool showOnlyWhenIssue;
@@ -99,7 +101,7 @@ class _TimeSyncWarningWidgetState extends State<TimeSyncWarningWidget> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    isWarning ? 'Time Sync Warning' : 'Time Synchronized',
+                    isWarning ? 'timeSyncWarning'.tr : 'timeSynchronized'.tr,
                     style: TextStyle(
                       color: textColor,
                       fontWeight: FontWeight.bold,
@@ -125,7 +127,7 @@ class _TimeSyncWarningWidgetState extends State<TimeSyncWarningWidget> {
                   foregroundColor: textColor,
                   padding: EdgeInsets.zero,
                 ),
-                child: const Text('Learn more'),
+                child: const TranslatedText('learnMore'),
               ),
             ],
           ],
@@ -141,7 +143,7 @@ class _TimeSyncWarningWidgetState extends State<TimeSyncWarningWidget> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Time Synchronization'),
+        title: const TranslatedText('timeSynchronization'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -212,11 +214,11 @@ class _TimeSyncWarningWidgetState extends State<TimeSyncWarningWidget> {
               Navigator.of(context).pop();
               await TimeSyncService.checkTimeSync();
             },
-            child: const Text('Check Again'),
+            child: const TranslatedText('checkAgain'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: const TranslatedText('ok'),
           ),
         ],
       ),
@@ -226,19 +228,19 @@ class _TimeSyncWarningWidgetState extends State<TimeSyncWarningWidget> {
   String _getStatusDisplayName(TimeSyncStatus status) {
     switch (status) {
       case TimeSyncStatus.synchronized:
-        return 'Synchronized';
+        return 'synchronized'.tr;
       case TimeSyncStatus.unknown:
-        return 'Unknown';
+        return 'unknown'.tr;
       case TimeSyncStatus.offsetTooLarge:
-        return 'Time Zone Issue';
+        return 'timeZoneIssue'.tr;
       case TimeSyncStatus.timeUnrealistic:
-        return 'Incorrect Time';
+        return 'incorrectTime'.tr;
       case TimeSyncStatus.utcMismatch:
-        return 'Sync Issue';
+        return 'syncIssue'.tr;
       case TimeSyncStatus.networkUnavailable:
-        return 'Network Unavailable';
+        return 'networkUnavailable'.tr;
       case TimeSyncStatus.checkFailed:
-        return 'Check Failed';
+        return 'checkFailed'.tr;
     }
   }
 

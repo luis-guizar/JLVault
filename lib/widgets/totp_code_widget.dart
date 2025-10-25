@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../models/totp_config.dart';
 import '../services/totp_generator.dart';
 
+import 'translated_text.dart';
+
 /// Widget that displays a TOTP code with countdown timer
 class TOTPCodeWidget extends StatefulWidget {
   final TOTPConfig config;
@@ -127,7 +129,7 @@ class _TOTPCodeWidgetState extends State<TOTPCodeWidget>
           IconButton(
             onPressed: _copyCode,
             icon: const Icon(Icons.copy),
-            tooltip: 'Copy code',
+            tooltip: 'copyCodeTooltip'.tr,
           ),
       ],
     );
@@ -214,8 +216,8 @@ class _TOTPCodeWidgetState extends State<TOTPCodeWidget>
           style: TextStyle(fontSize: 10, color: Colors.grey[500]),
         ),
         if (_isExpiringSoon)
-          Text(
-            'EXPIRING SOON',
+          TranslatedText(
+            'expiringSoon',
             style: TextStyle(
               fontSize: 10,
               color: Colors.red.shade700,
@@ -242,7 +244,7 @@ class _TOTPCodeWidgetState extends State<TOTPCodeWidget>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('TOTP code copied to clipboard'),
+          content: const TranslatedText('totpCodeCopied'),
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
           action: SnackBarAction(

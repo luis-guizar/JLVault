@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/vault_manager.dart';
+
 import '../utils/vault_icons.dart';
+import 'translated_text.dart';
 
 /// Dialog for creating a new vault with customization options
 class VaultCreationDialog extends StatefulWidget {
@@ -59,7 +61,7 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Create New Vault'),
+      title: const TranslatedText('createNewVault'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -69,7 +71,7 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
-                labelText: 'Vault Name',
+                labelText: 'vaultName'.tr,
                 hintText: 'e.g., Work, Personal, Family',
                 errorText: _errorMessage,
                 border: const OutlineInputBorder(),
@@ -81,8 +83,8 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
             const SizedBox(height: 24),
 
             // Icon selection
-            const Text(
-              'Choose Icon',
+            TranslatedText(
+              'chooseIcon',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 12),
@@ -124,8 +126,8 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
             const SizedBox(height: 24),
 
             // Color selection
-            const Text(
-              'Choose Color',
+            TranslatedText(
+              'chooseColor',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 12),
@@ -175,7 +177,7 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
               : () {
                   Navigator.of(context).pop();
                 },
-          child: const Text('Cancel'),
+          child: const TranslatedText('cancel'),
         ),
         ElevatedButton(
           onPressed: _isCreating ? null : _createVault,
@@ -185,7 +187,7 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Create'),
+              : const TranslatedText('create'),
         ),
       ],
     );

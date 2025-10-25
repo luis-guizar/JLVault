@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
 import '../services/vault_manager.dart';
 import '../services/auth_service.dart';
+
 import '../utils/vault_icons.dart';
+import 'translated_text.dart';
 
 /// Widget for switching between vaults with authentication
 class VaultSwitcher extends StatefulWidget {
@@ -66,14 +68,14 @@ class _VaultSwitcherState extends State<VaultSwitcher> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Switched to "${vault.name}" vault')),
+          SnackBar(content: Text('${'switchedToVault'.tr} "${vault.name}"')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error switching vault: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${'errorSwitchingVault'.tr}: $e')),
+        );
       }
     }
   }
@@ -110,8 +112,8 @@ class _VaultSwitcherState extends State<VaultSwitcher> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Switch Vault',
+                TranslatedText(
+                  'switchVault',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const Spacer(),
@@ -247,9 +249,9 @@ class _VaultAuthenticationDialogState extends State<VaultAuthenticationDialog> {
           _isAuthenticating = false;
         });
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Authentication failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${'authenticationFailed'.tr}: $e')),
+        );
       }
     }
   }
@@ -310,7 +312,7 @@ class _VaultAuthenticationDialogState extends State<VaultAuthenticationDialog> {
               : () {
                   Navigator.of(context).pop(false);
                 },
-          child: const Text('Cancel'),
+          child: const TranslatedText('cancel'),
         ),
         ElevatedButton(
           onPressed: _isAuthenticating ? null : _authenticate,
@@ -320,7 +322,7 @@ class _VaultAuthenticationDialogState extends State<VaultAuthenticationDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Authenticate'),
+              : const TranslatedText('authenticate'),
         ),
       ],
     );

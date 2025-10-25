@@ -10,8 +10,10 @@ import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
 import '../services/platform_crypto_service.dart';
 import '../services/crypto_isolate_service.dart';
+
 import '../data/db_helper.dart';
 import '../services/time_sync_service.dart';
+import '../widgets/translated_text.dart';
 
 /// Screen for managing TOTP codes for all accounts
 class TOTPManagementScreen extends StatefulWidget {
@@ -122,7 +124,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('TOTP Authenticator'),
+            const TranslatedText('totpManagement'),
             if (kDebugMode) ...[
               const SizedBox(width: 8),
               Container(
@@ -147,14 +149,14 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
           IconButton(
             onPressed: _showTimeSyncInfo,
             icon: const Icon(Icons.info_outline),
-            tooltip: 'Time sync info',
+            tooltip: 'timeSyncInfo'.tr,
           ),
         ],
       ),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _addTOTPToAccount,
-        tooltip: 'Add TOTP to account',
+        tooltip: 'addTotpToAccount'.tr,
         child: const Icon(Icons.add),
       ),
     );
@@ -273,7 +275,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
                   value: 'edit',
                   child: ListTile(
                     leading: Icon(Icons.edit),
-                    title: Text('Edit TOTP'),
+                    title: TranslatedText('editTotp'),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -281,8 +283,8 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
                   value: 'remove',
                   child: ListTile(
                     leading: Icon(Icons.delete, color: Colors.red),
-                    title: Text(
-                      'Remove TOTP',
+                    title: TranslatedText(
+                      'removeTotp',
                       style: TextStyle(color: Colors.red),
                     ),
                     contentPadding: EdgeInsets.zero,
@@ -313,7 +315,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
         trailing: TextButton.icon(
           onPressed: () => _setupTOTPForAccount(account),
           icon: const Icon(Icons.security),
-          label: const Text('Add TOTP'),
+          label: const TranslatedText('addTotp'),
         ),
       ),
     );
@@ -356,7 +358,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Select Account'),
+        title: const TranslatedText('selectAccount'),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
@@ -411,7 +413,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove TOTP'),
+        title: const TranslatedText('removeTotp'),
         content: Text(
           'Are you sure you want to remove TOTP authentication from "${account.name}"?',
         ),
@@ -476,7 +478,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Time Synchronization'),
+        title: const TranslatedText('timeSynchronization'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -540,7 +542,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
               Navigator.of(context).pop();
               await TimeSyncService.checkTimeSync();
             },
-            child: const Text('Check Again'),
+            child: const TranslatedText('checkAgain'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -554,19 +556,19 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
   String _getStatusDisplayName(TimeSyncStatus status) {
     switch (status) {
       case TimeSyncStatus.synchronized:
-        return 'Synchronized';
+        return 'synchronized'.tr;
       case TimeSyncStatus.unknown:
-        return 'Unknown';
+        return 'unknown'.tr;
       case TimeSyncStatus.offsetTooLarge:
-        return 'Time Zone Issue';
+        return 'timeZoneIssue'.tr;
       case TimeSyncStatus.timeUnrealistic:
-        return 'Incorrect Time';
+        return 'incorrectTime'.tr;
       case TimeSyncStatus.utcMismatch:
-        return 'Sync Issue';
+        return 'syncIssue'.tr;
       case TimeSyncStatus.networkUnavailable:
-        return 'Network Unavailable';
+        return 'networkUnavailable'.tr;
       case TimeSyncStatus.checkFailed:
-        return 'Check Failed';
+        return 'checkFailed'.tr;
     }
   }
 

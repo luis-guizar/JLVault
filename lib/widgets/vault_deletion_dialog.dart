@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
 import '../services/vault_manager.dart';
 import '../services/enhanced_auth_service.dart';
+
 import '../utils/vault_icons.dart';
+import 'translated_text.dart';
 
 /// Dialog for confirming vault deletion with security measures
 class VaultDeletionDialog extends StatefulWidget {
@@ -69,9 +71,9 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Authentication failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${'authenticationFailed'.tr}: $e')),
+        );
       }
     }
   }
@@ -98,9 +100,9 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error deleting vault: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${'errorDeletingVault'.tr}: $e')),
+        );
       }
     }
   }
@@ -113,7 +115,10 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
           const Icon(Icons.warning, color: Colors.red, size: 24),
           const SizedBox(width: 12),
           const Expanded(
-            child: Text('Delete Vault', style: TextStyle(color: Colors.red)),
+            child: TranslatedText(
+              'deleteVault',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -264,14 +269,21 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
                     width: 1,
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 20),
-                    SizedBox(width: 8),
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Authentication successful',
-                        style: TextStyle(color: Colors.green, fontSize: 12),
+                        'authenticationSuccessful'.tr,
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ],
@@ -287,12 +299,12 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
               : () {
                   Navigator.of(context).pop(false);
                 },
-          child: const Text('Cancel'),
+          child: const TranslatedText('cancel'),
         ),
         if (!_hasAuthenticated)
           ElevatedButton(
             onPressed: _isConfirmationValid ? _authenticate : null,
-            child: const Text('Authenticate'),
+            child: const TranslatedText('authenticate'),
           )
         else
           ElevatedButton(
@@ -312,7 +324,7 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
-                : const Text('Delete Vault'),
+                : const TranslatedText('deleteVault'),
           ),
       ],
     );

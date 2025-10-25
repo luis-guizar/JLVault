@@ -4,9 +4,11 @@ import '../models/premium_feature.dart';
 import '../services/vault_manager.dart';
 import '../services/feature_gate_factory.dart';
 import '../services/license_manager_factory.dart';
+
 import '../widgets/vault_card.dart';
 import '../widgets/feature_gate_wrapper.dart';
 import '../widgets/upgrade_prompt_dialog.dart';
+import '../widgets/translated_text.dart';
 
 /// Screen for managing vaults with biometric authentication for sensitive operations
 class VaultManagementScreen extends StatefulWidget {
@@ -60,7 +62,7 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Vaults'),
+        title: const TranslatedText('manageVaults'),
         actions: [
           StreamBuilder<Map<PremiumFeature, bool>>(
             stream: _featureGate.accessStream,
@@ -76,8 +78,8 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
                     ? _showCreateVaultDialog
                     : _showMultipleVaultsUpgrade,
                 tooltip: canCreateMore
-                    ? 'Create New Vault'
-                    : 'Upgrade for Multiple Vaults',
+                    ? 'createNewVault'.tr
+                    : 'upgradetoPremium'.tr,
               );
             },
           ),
@@ -103,8 +105,8 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
               color: Theme.of(context).colorScheme.error,
             ),
             const SizedBox(height: 16),
-            Text(
-              'Error loading vaults',
+            TranslatedText(
+              'errorLoadingVaults',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
@@ -114,7 +116,10 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadVaults, child: const Text('Retry')),
+            ElevatedButton(
+              onPressed: _loadVaults,
+              child: const TranslatedText('retry'),
+            ),
           ],
         ),
       );
@@ -127,10 +132,10 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
           children: [
             Icon(Icons.folder_outlined, size: 64),
             SizedBox(height: 16),
-            Text('No vaults found', style: TextStyle(fontSize: 18)),
+            TranslatedText('noVaultsFound', style: TextStyle(fontSize: 18)),
             SizedBox(height: 8),
-            Text(
-              'Create your first vault to get started',
+            TranslatedText(
+              'createFirstVault',
               style: TextStyle(color: Colors.grey),
             ),
           ],
@@ -235,7 +240,7 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Vault'),
+        title: const TranslatedText('deleteVault'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,7 +299,7 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const TranslatedText('cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -302,7 +307,7 @@ class _VaultManagementScreenState extends State<VaultManagementScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Delete'),
+            child: const TranslatedText('delete'),
           ),
         ],
       ),

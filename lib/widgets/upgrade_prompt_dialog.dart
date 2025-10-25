@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/premium_feature.dart';
 import '../services/feature_gate.dart';
 import '../services/android_feature_gate.dart';
+
 import 'premium_badge.dart';
+import 'translated_text.dart';
 
 /// Dialog that prompts users to upgrade to premium
 class UpgradePromptDialog extends StatefulWidget {
@@ -54,7 +56,7 @@ class _UpgradePromptDialogState extends State<UpgradePromptDialog> {
         children: [
           Icon(Icons.star, color: theme.colorScheme.primary, size: 28),
           const SizedBox(width: 8),
-          const Text('Upgrade to Premium'),
+          const TranslatedText('upgradetoPremium'),
         ],
       ),
       content: SingleChildScrollView(
@@ -75,11 +77,11 @@ class _UpgradePromptDialogState extends State<UpgradePromptDialog> {
       actions: [
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-          child: const Text('Maybe Later'),
+          child: const TranslatedText('maybelater'),
         ),
         TextButton(
           onPressed: _isLoading ? null : _restorePurchases,
-          child: const Text('Restore'),
+          child: const TranslatedText('restore'),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _purchasePremium,
