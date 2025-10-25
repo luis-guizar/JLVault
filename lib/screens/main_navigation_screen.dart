@@ -80,10 +80,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         );
       case 1:
         return TOTPManagementScreen(
-          accounts: [], // Will be loaded by the screen itself
-          onAccountUpdated: (account) {
-            // Handle account updates if needed
-          },
+          vaultManager: widget.vaultManager,
+          encryptionService: widget.encryptionService,
         );
       case 2:
         return SecurityDashboardScreen(

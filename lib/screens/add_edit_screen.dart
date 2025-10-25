@@ -81,7 +81,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
     try {
       // Decrypt using vault-specific encryption
-      final decryptedAccount = await widget.encryptionService.decryptAccount(
+      final decryptedAccount = await VaultEncryptionService.decryptAccount(
         account,
       );
       _usernameController.text = decryptedAccount.username;
@@ -140,7 +140,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       );
 
       // Encrypt the account data using vault-specific encryption
-      final encryptedAccount = await widget.encryptionService.encryptAccount(
+      final encryptedAccount = await VaultEncryptionService.encryptAccount(
         account,
       );
 

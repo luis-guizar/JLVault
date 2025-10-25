@@ -196,24 +196,26 @@ class _P2PSyncScreenState extends State<P2PSyncScreen>
                   Expanded(
                     child: TabBarView(
                       children: [
-                        QrPairingGeneratorWidget(
-                          pairingService: _pairingService,
-                          onPairingComplete: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Device paired successfully!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          },
-                          onError: (error) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Pairing error: $error'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          },
+                        SingleChildScrollView(
+                          child: QrPairingGeneratorWidget(
+                            pairingService: _pairingService,
+                            onPairingComplete: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Device paired successfully!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            },
+                            onError: (error) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Pairing error: $error'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            },
+                          ),
                         ),
                         QrPairingScannerWidget(
                           pairingService: _pairingService,

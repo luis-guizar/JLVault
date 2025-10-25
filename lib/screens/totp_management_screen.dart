@@ -1,21 +1,28 @@
 import 'package:flutter/material.dart';
 import '../models/account.dart';
 import '../models/totp_config.dart';
+
 import '../widgets/totp_code_widget.dart';
 import '../widgets/time_sync_warning_widget.dart';
 import '../screens/totp_setup_screen.dart';
-
+import '../services/vault_manager.dart';
+import '../services/vault_encryption_service.dart';
+import '../data/db_helper.dart';
 import '../services/time_sync_service.dart';
 
 /// Screen for managing TOTP codes for all accounts
 class TOTPManagementScreen extends StatefulWidget {
-  final List<Account> accounts;
-  final Function(Account) onAccountUpdated;
+  final VaultManager? vaultManager;
+  final VaultEncryptionService? encryptionService;
+  final List<Account>? accounts;
+  final Function(Account)? onAccountUpdated;
 
   const TOTPManagementScreen({
     super.key,
-    required this.accounts,
-    required this.onAccountUpdated,
+    this.vaultManager,
+    this.encryptionService,
+    this.accounts,
+    this.onAccountUpdated,
   });
 
   @override
@@ -23,11 +30,65 @@ class TOTPManagementScreen extends StatefulWidget {
 }
 
 class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
+  List<Account> _allAccounts = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.accounts != null) {
+      _allAccounts = widget.accounts!;
+      _isLoading = false;
+    } else {
+      _loadAccounts();
+    }
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      // Load accounts from the current vault
+      // This is a simplified version - in a real app you'd get the current vault ID
+      final accounts = await _getAllAccountsFromCurrentVault();
+      setState(() {
+        _allAccounts = accounts;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading accounts: $e')));
+      }
+    }
+  }
+
+  Future<List<Account>> _getAllAccountsFromCurrentVault() async {
+    if (widget.vaultManager == null || widget.encryptionService == null) {
+      return [];
+    }
+
+    try {
+      final vault = await widget.vaultManager!.getActiveVault();
+      if (vault == null) return [];
+
+      final encryptedAccounts = await DBHelper.getAllForVault(vault.id);
+      final decryptedAccounts = await VaultEncryptionService.decryptAccounts(
+        encryptedAccounts,
+      );
+      return decryptedAccounts;
+    } catch (e) {
+      return [];
+    }
+  }
+
   List<Account> get _accountsWithTOTP =>
-      widget.accounts.where((account) => account.totpConfig != null).toList();
+      _allAccounts.where((account) => account.totpConfig != null).toList();
 
   List<Account> get _accountsWithoutTOTP =>
-      widget.accounts.where((account) => account.totpConfig == null).toList();
+      _allAccounts.where((account) => account.totpConfig == null).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -45,13 +106,17 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _addTOTPToAccount,
-        child: const Icon(Icons.add),
         tooltip: 'Add TOTP to account',
+        child: const Icon(Icons.add),
       ),
     );
   }
 
   Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Column(
       children: [
         const TimeSyncWarningWidget(),
@@ -188,6 +253,19 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
   }
 
   void _addTOTPToAccount() {
+    // Check if there are no accounts at all
+    if (_allAccounts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No accounts found. Create some accounts first to add TOTP authentication.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Check if all existing accounts already have TOTP
     if (_accountsWithoutTOTP.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -282,7 +360,15 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
 
   void _updateAccountTOTP(Account account, TOTPConfig? config) {
     final updatedAccount = account.copyWith(totpConfig: config);
-    widget.onAccountUpdated(updatedAccount);
+
+    // Update the local list
+    final index = _allAccounts.indexWhere((a) => a.id == account.id);
+    if (index != -1) {
+      _allAccounts[index] = updatedAccount;
+    }
+
+    // Call the callback if provided
+    widget.onAccountUpdated?.call(updatedAccount);
 
     if (mounted) {
       setState(() {

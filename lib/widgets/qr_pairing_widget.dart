@@ -120,9 +120,9 @@ class _QrPairingGeneratorWidgetState extends State<QrPairingGeneratorWidget> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -392,51 +392,56 @@ class _QrPairingScannerWidgetState extends State<QrPairingScannerWidget> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Scan QR Code to Pair',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-
-            Container(
-              height: 300,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _controller != null
-                    ? MobileScanner(
-                        controller: _controller!,
-                        onDetect: _onDetect,
-                      )
-                    : const Center(child: CircularProgressIndicator()),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            _buildStatusIndicator(),
-
-            const SizedBox(height: 16),
-
-            if (_isProcessing) ...[
-              const LinearProgressIndicator(),
-              const SizedBox(height: 8),
-              const Text('Processing pairing request...'),
-            ] else ...[
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Text(
-                'Point your camera at the QR code displayed on the other device.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
+                'Scan QR Code to Pair',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
+              const SizedBox(height: 16),
+
+              Container(
+                height: 280,
+                width: double.infinity,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.4,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _controller != null
+                      ? MobileScanner(
+                          controller: _controller!,
+                          onDetect: _onDetect,
+                        )
+                      : const Center(child: CircularProgressIndicator()),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              _buildStatusIndicator(),
+
+              const SizedBox(height: 16),
+
+              if (_isProcessing) ...[
+                const LinearProgressIndicator(),
+                const SizedBox(height: 8),
+                const Text('Processing pairing request...'),
+              ] else ...[
+                Text(
+                  'Point your camera at the QR code displayed on the other device.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

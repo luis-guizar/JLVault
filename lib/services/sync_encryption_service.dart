@@ -1,248 +1,637 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
-import 'package:encrypt/encrypt.dart';
+import 'package:pointycastle/export.dart';
 import '../models/sync_protocol.dart';
 
-/// Service for encrypting and decrypting sync data
+/// Sync encryption service with perfect forward secrecy using ECDH
 class SyncEncryptionService {
-  final Map<String, Uint8List> _deviceKeys = {};
-  final Map<String, Uint8List> _sessionKeys = {};
-  final Random _random = Random.secure();
+  static const int _nonceLength = 12; // GCM nonce length
+  static const Duration _keyRotationInterval = Duration(minutes: 30);
 
-  /// Generate a new device-specific encryption key
-  Future<Uint8List> generateDeviceKey(String deviceId) async {
-    final key = _generateRandomBytes(32); // 256-bit key
-    _deviceKeys[deviceId] = key;
-    return key;
-  }
+  // ECDH curve parameters (using P-256)
+  static final ECDomainParameters _ecParams = ECDomainParameters('secp256r1');
 
-  /// Set device key (from pairing process)
-  void setDeviceKey(String deviceId, Uint8List key) {
-    _deviceKeys[deviceId] = key;
-  }
+  final Map<String, SyncSession> _activeSessions = {};
+  final SecureRandom _secureRandom = _createSecureRandom();
 
-  /// Generate a session key for temporary encryption
-  Future<Uint8List> generateSessionKey(String deviceId) async {
-    final sessionKey = _generateRandomBytes(32);
-    _sessionKeys[deviceId] = sessionKey;
-    return sessionKey;
-  }
-
-  /// Encrypt sync data for transmission
-  Future<EncryptedSyncPacket> encryptSyncData({
-    required String deviceId,
-    required Map<String, dynamic> data,
-    bool useSessionKey = false,
-  }) async {
-    final key = useSessionKey ? _sessionKeys[deviceId] : _deviceKeys[deviceId];
-
-    if (key == null) {
-      throw SyncEncryptionException(
-        'No encryption key found for device: $deviceId',
-      );
-    }
-
-    try {
-      // Convert data to JSON bytes
-      final jsonData = jsonEncode(data);
-      final dataBytes = utf8.encode(jsonData);
-
-      // Generate nonce
-      final nonce = _generateRandomBytes(12); // 96-bit nonce for AES-GCM
-
-      // Encrypt data using AES-GCM
-      final encrypter = Encrypter(AES(Key(key), mode: AESMode.gcm));
-      final iv = IV(nonce);
-      final encrypted = encrypter.encryptBytes(dataBytes, iv: iv);
-
-      // Create signature
-      final signature = _createSignature(encrypted.bytes, key);
-
-      return EncryptedSyncPacket(
-        deviceId: deviceId,
-        nonce: base64Encode(nonce),
-        encryptedData: encrypted.bytes,
-        signature: signature,
-        timestamp: DateTime.now(),
-      );
-    } catch (e) {
-      throw SyncEncryptionException(
-        'Failed to encrypt sync data: ${e.toString()}',
-      );
-    }
-  }
-
-  /// Decrypt sync data from transmission
-  Future<Map<String, dynamic>> decryptSyncData({
-    required EncryptedSyncPacket packet,
-    bool useSessionKey = false,
-  }) async {
-    final key = useSessionKey
-        ? _sessionKeys[packet.deviceId]
-        : _deviceKeys[packet.deviceId];
-
-    if (key == null) {
-      throw SyncEncryptionException(
-        'No decryption key found for device: ${packet.deviceId}',
-      );
-    }
-
-    try {
-      // Verify signature
-      final expectedSignature = _createSignature(packet.encryptedData, key);
-      if (packet.signature != expectedSignature) {
-        throw SyncEncryptionException(
-          'Invalid signature - data may be tampered',
-        );
-      }
-
-      // Decrypt data
-      final nonce = base64Decode(packet.nonce);
-      final encrypter = Encrypter(AES(Key(key), mode: AESMode.gcm));
-      final iv = IV(nonce);
-      final encrypted = Encrypted(packet.encryptedData);
-
-      final decryptedBytes = encrypter.decryptBytes(encrypted, iv: iv);
-      final jsonString = utf8.decode(decryptedBytes);
-
-      return jsonDecode(jsonString) as Map<String, dynamic>;
-    } catch (e) {
-      throw SyncEncryptionException(
-        'Failed to decrypt sync data: ${e.toString()}',
-      );
-    }
-  }
-
-  /// Encrypt individual vault entry data
-  Future<Uint8List> encryptEntryData({
-    required String deviceId,
-    required Map<String, dynamic> entryData,
-  }) async {
-    final key = _deviceKeys[deviceId];
-    if (key == null) {
-      throw SyncEncryptionException(
-        'No encryption key found for device: $deviceId',
-      );
-    }
-
-    try {
-      final jsonData = jsonEncode(entryData);
-      final dataBytes = utf8.encode(jsonData);
-
-      final nonce = _generateRandomBytes(12);
-      final encrypter = Encrypter(AES(Key(key), mode: AESMode.gcm));
-      final iv = IV(nonce);
-      final encrypted = encrypter.encryptBytes(dataBytes, iv: iv);
-
-      // Combine nonce + encrypted data
-      final result = Uint8List(nonce.length + encrypted.bytes.length);
-      result.setRange(0, nonce.length, nonce);
-      result.setRange(nonce.length, result.length, encrypted.bytes);
-
-      return result;
-    } catch (e) {
-      throw SyncEncryptionException(
-        'Failed to encrypt entry data: ${e.toString()}',
-      );
-    }
-  }
-
-  /// Decrypt individual vault entry data
-  Future<Map<String, dynamic>> decryptEntryData({
-    required String deviceId,
-    required Uint8List encryptedData,
-  }) async {
-    final key = _deviceKeys[deviceId];
-    if (key == null) {
-      throw SyncEncryptionException(
-        'No decryption key found for device: $deviceId',
-      );
-    }
-
-    try {
-      // Extract nonce and encrypted data
-      final nonce = encryptedData.sublist(0, 12);
-      final ciphertext = encryptedData.sublist(12);
-
-      final encrypter = Encrypter(AES(Key(key), mode: AESMode.gcm));
-      final iv = IV(nonce);
-      final encrypted = Encrypted(ciphertext);
-
-      final decryptedBytes = encrypter.decryptBytes(encrypted, iv: iv);
-      final jsonString = utf8.decode(decryptedBytes);
-
-      return jsonDecode(jsonString) as Map<String, dynamic>;
-    } catch (e) {
-      throw SyncEncryptionException(
-        'Failed to decrypt entry data: ${e.toString()}',
-      );
-    }
-  }
-
-  /// Derive a shared key from two device keys (for key exchange)
-  Future<Uint8List> deriveSharedKey(
-    Uint8List localKey,
-    Uint8List remoteKey,
+  /// Creates a new sync session with ephemeral key exchange
+  Future<SyncSession> createSyncSession(
+    String deviceId,
+    String devicePublicKey,
   ) async {
-    // Simple key derivation - in production, use proper ECDH
-    final combined = Uint8List(localKey.length + remoteKey.length);
-    combined.setRange(0, localKey.length, localKey);
-    combined.setRange(localKey.length, combined.length, remoteKey);
+    // Generate ephemeral ECDH key pair for this session
+    final keyPair = _generateECDHKeyPair();
 
-    final digest = sha256.convert(combined);
-    return Uint8List.fromList(digest.bytes);
+    // Derive shared secret using ECDH
+    final sharedSecret = _performECDH(keyPair.privateKey, devicePublicKey);
+
+    // Derive session keys from shared secret
+    final sessionKeys = _deriveSessionKeys(sharedSecret, deviceId);
+
+    final session = SyncSession(
+      sessionId: _generateSessionId(),
+      deviceId: deviceId,
+      ephemeralPublicKey: _encodePublicKey(keyPair.publicKey),
+      ephemeralPrivateKey: keyPair.privateKey,
+      encryptionKey: sessionKeys.encryptionKey,
+      authenticationKey: sessionKeys.authenticationKey,
+      createdAt: DateTime.now(),
+      lastUsed: DateTime.now(),
+    );
+
+    _activeSessions[session.sessionId] = session;
+
+    // Schedule key rotation
+    _scheduleKeyRotation(session.sessionId);
+
+    return session;
   }
 
-  /// Create HMAC signature for data integrity
-  String _createSignature(Uint8List data, Uint8List key) {
-    final hmac = Hmac(sha256, key);
-    final digest = hmac.convert(data);
-    return base64Encode(digest.bytes);
+  /// Accepts a sync session from another device
+  Future<SyncSession> acceptSyncSession(
+    String deviceId,
+    String devicePublicKey,
+    String ephemeralPublicKey,
+  ) async {
+    // Generate our ephemeral key pair
+    final keyPair = _generateECDHKeyPair();
+
+    // Derive shared secret using their ephemeral public key
+    final sharedSecret = _performECDH(keyPair.privateKey, ephemeralPublicKey);
+
+    // Derive session keys from shared secret
+    final sessionKeys = _deriveSessionKeys(sharedSecret, deviceId);
+
+    final session = SyncSession(
+      sessionId: _generateSessionId(),
+      deviceId: deviceId,
+      ephemeralPublicKey: _encodePublicKey(keyPair.publicKey),
+      ephemeralPrivateKey: keyPair.privateKey,
+      encryptionKey: sessionKeys.encryptionKey,
+      authenticationKey: sessionKeys.authenticationKey,
+      createdAt: DateTime.now(),
+      lastUsed: DateTime.now(),
+    );
+
+    _activeSessions[session.sessionId] = session;
+
+    // Schedule key rotation
+    _scheduleKeyRotation(session.sessionId);
+
+    return session;
   }
 
-  /// Generate cryptographically secure random bytes
-  Uint8List _generateRandomBytes(int length) {
+  /// Encrypts sync data using session-specific keys
+  Future<EncryptedSyncData> encryptSyncData(
+    String sessionId,
+    Map<String, dynamic> data,
+  ) async {
+    final session = _activeSessions[sessionId];
+    if (session == null) {
+      throw Exception('Invalid session ID: $sessionId');
+    }
+
+    // Check if key rotation is needed
+    if (_needsKeyRotation(session)) {
+      await _rotateSessionKeys(sessionId);
+    }
+
+    final plaintext = jsonEncode(data);
+    final plaintextBytes = utf8.encode(plaintext);
+
+    // Generate random nonce for this message
+    final nonce = _generateNonce();
+
+    // Encrypt using AES-256-GCM
+    final cipher = GCMBlockCipher(AESEngine());
+    final params = AEADParameters(
+      KeyParameter(session.encryptionKey),
+      128, // 128-bit authentication tag
+      nonce,
+      Uint8List(0), // No additional authenticated data
+    );
+
+    cipher.init(true, params);
+
+    final ciphertext = Uint8List(
+      plaintextBytes.length + 16,
+    ); // +16 for auth tag
+    var offset = cipher.processBytes(
+      plaintextBytes,
+      0,
+      plaintextBytes.length,
+      ciphertext,
+      0,
+    );
+    cipher.doFinal(ciphertext, offset);
+
+    // Generate HMAC for additional authentication
+    final hmac = _generateHMAC(session.authenticationKey, nonce, ciphertext);
+
+    // Update session last used time
+    session.lastUsed = DateTime.now();
+
+    return EncryptedSyncData(
+      sessionId: sessionId,
+      nonce: base64.encode(nonce),
+      ciphertext: base64.encode(ciphertext),
+      hmac: base64.encode(hmac),
+      timestamp: DateTime.now(),
+    );
+  }
+
+  /// Decrypts sync data using session-specific keys
+  Future<Map<String, dynamic>> decryptSyncData(
+    EncryptedSyncData encryptedData,
+  ) async {
+    final session = _activeSessions[encryptedData.sessionId];
+    if (session == null) {
+      throw Exception('Invalid session ID: ${encryptedData.sessionId}');
+    }
+
+    final nonce = base64.decode(encryptedData.nonce);
+    final ciphertext = base64.decode(encryptedData.ciphertext);
+    final receivedHmac = base64.decode(encryptedData.hmac);
+
+    // Verify HMAC
+    final expectedHmac = _generateHMAC(
+      session.authenticationKey,
+      nonce,
+      ciphertext,
+    );
+    if (!_constantTimeEquals(receivedHmac, expectedHmac)) {
+      throw Exception('HMAC verification failed - data may be tampered');
+    }
+
+    // Decrypt using AES-256-GCM
+    final cipher = GCMBlockCipher(AESEngine());
+    final params = AEADParameters(
+      KeyParameter(session.encryptionKey),
+      128, // 128-bit authentication tag
+      nonce,
+      Uint8List(0), // No additional authenticated data
+    );
+
+    cipher.init(false, params);
+
+    final plaintext = Uint8List(ciphertext.length - 16); // -16 for auth tag
+    var offset = cipher.processBytes(
+      ciphertext,
+      0,
+      ciphertext.length,
+      plaintext,
+      0,
+    );
+    cipher.doFinal(plaintext, offset);
+
+    // Update session last used time
+    session.lastUsed = DateTime.now();
+
+    final plaintextString = utf8.decode(plaintext);
+    return jsonDecode(plaintextString) as Map<String, dynamic>;
+  }
+
+  /// Rotates session keys for long-running sessions
+  Future<void> rotateSessionKeys(String sessionId) async {
+    await _rotateSessionKeys(sessionId);
+  }
+
+  /// Closes a sync session and clears keys from memory
+  Future<void> closeSyncSession(String sessionId) async {
+    final session = _activeSessions.remove(sessionId);
+    if (session != null) {
+      // Clear sensitive data from memory
+      session.encryptionKey.fillRange(0, session.encryptionKey.length, 0);
+      session.authenticationKey.fillRange(
+        0,
+        session.authenticationKey.length,
+        0,
+      );
+    }
+  }
+
+  /// Closes all active sync sessions
+  Future<void> closeAllSessions() async {
+    final sessionIds = List<String>.from(_activeSessions.keys);
+    for (final sessionId in sessionIds) {
+      await closeSyncSession(sessionId);
+    }
+  }
+
+  /// Gets active session information (without sensitive data)
+  List<SyncSessionInfo> getActiveSessions() {
+    return _activeSessions.values
+        .map(
+          (session) => SyncSessionInfo(
+            sessionId: session.sessionId,
+            deviceId: session.deviceId,
+            createdAt: session.createdAt,
+            lastUsed: session.lastUsed,
+          ),
+        )
+        .toList();
+  }
+
+  // Private helper methods
+
+  static SecureRandom _createSecureRandom() {
+    final secureRandom = SecureRandom('Fortuna');
+    final seedSource = Random.secure();
+    final seeds = <int>[];
+    for (int i = 0; i < 32; i++) {
+      seeds.add(seedSource.nextInt(256));
+    }
+    secureRandom.seed(KeyParameter(Uint8List.fromList(seeds)));
+    return secureRandom;
+  }
+
+  AsymmetricKeyPair<ECPublicKey, ECPrivateKey> _generateECDHKeyPair() {
+    final keyGen = ECKeyGenerator();
+    keyGen.init(
+      ParametersWithRandom(ECKeyGeneratorParameters(_ecParams), _secureRandom),
+    );
+    final keyPair = keyGen.generateKeyPair();
+    return AsymmetricKeyPair<ECPublicKey, ECPrivateKey>(
+      keyPair.publicKey as ECPublicKey,
+      keyPair.privateKey as ECPrivateKey,
+    );
+  }
+
+  Uint8List _performECDH(ECPrivateKey privateKey, String publicKeyString) {
+    // Decode the public key
+    final publicKeyBytes = base64.decode(publicKeyString);
+    final publicKey = _decodePublicKey(publicKeyBytes);
+
+    // Perform ECDH
+    final ecdh = ECDHBasicAgreement();
+    ecdh.init(privateKey);
+    final sharedSecret = ecdh.calculateAgreement(publicKey);
+
+    // Convert to bytes
+    return _bigIntToBytes(sharedSecret, 32);
+  }
+
+  SessionKeys _deriveSessionKeys(Uint8List sharedSecret, String deviceId) {
+    // Use HKDF-like key derivation with HMAC-SHA256
+    final salt = sha256.convert(utf8.encode(deviceId)).bytes;
+    final info = utf8.encode('SyncKeys');
+
+    // HKDF Extract: PRK = HMAC-Hash(salt, IKM)
+    final hmacExtract = Hmac(sha256, salt);
+    final prk = hmacExtract.convert(sharedSecret).bytes;
+
+    // HKDF Expand: derive 64 bytes (32 for encryption, 32 for authentication)
+    final derivedKeys = _hkdfExpand(prk, info, 64);
+
+    return SessionKeys(
+      encryptionKey: Uint8List.fromList(derivedKeys.sublist(0, 32)),
+      authenticationKey: Uint8List.fromList(derivedKeys.sublist(32, 64)),
+    );
+  }
+
+  /// Simple HKDF Expand implementation
+  Uint8List _hkdfExpand(List<int> prk, List<int> info, int length) {
+    final hmac = Hmac(sha256, prk);
+    final result = <int>[];
+    final hashLen = 32; // SHA256 output length
+    final n = (length / hashLen).ceil();
+
+    var t = <int>[];
+    for (int i = 1; i <= n; i++) {
+      final input = <int>[];
+      input.addAll(t);
+      input.addAll(info);
+      input.add(i);
+      t = hmac.convert(input).bytes;
+      result.addAll(t);
+    }
+
+    return Uint8List.fromList(result.take(length).toList());
+  }
+
+  String _encodePublicKey(ECPublicKey publicKey) {
+    final point = publicKey.Q!;
+    final x = _bigIntToBytes(point.x!.toBigInteger()!, 32);
+    final y = _bigIntToBytes(point.y!.toBigInteger()!, 32);
+    final encoded = Uint8List(65);
+    encoded[0] = 0x04; // Uncompressed point indicator
+    encoded.setRange(1, 33, x);
+    encoded.setRange(33, 65, y);
+    return base64.encode(encoded);
+  }
+
+  ECPublicKey _decodePublicKey(Uint8List bytes) {
+    if (bytes.length != 65 || bytes[0] != 0x04) {
+      throw ArgumentError('Invalid public key format');
+    }
+
+    final x = _bytesToBigInt(bytes.sublist(1, 33));
+    final y = _bytesToBigInt(bytes.sublist(33, 65));
+    final point = _ecParams.curve.createPoint(x, y);
+
+    return ECPublicKey(point, _ecParams);
+  }
+
+  Uint8List _bigIntToBytes(BigInt value, int length) {
     final bytes = Uint8List(length);
-    for (int i = 0; i < length; i++) {
-      bytes[i] = _random.nextInt(256);
+    var temp = value;
+    for (int i = length - 1; i >= 0; i--) {
+      bytes[i] = (temp & BigInt.from(0xff)).toInt();
+      temp = temp >> 8;
     }
     return bytes;
   }
 
-  /// Clear all encryption keys (for security)
-  void clearKeys() {
-    _deviceKeys.clear();
-    _sessionKeys.clear();
+  BigInt _bytesToBigInt(Uint8List bytes) {
+    var result = BigInt.zero;
+    for (int i = 0; i < bytes.length; i++) {
+      result = (result << 8) + BigInt.from(bytes[i]);
+    }
+    return result;
   }
 
-  /// Clear keys for a specific device
-  void clearDeviceKeys(String deviceId) {
-    _deviceKeys.remove(deviceId);
-    _sessionKeys.remove(deviceId);
+  Uint8List _generateNonce() {
+    final nonce = Uint8List(_nonceLength);
+    for (int i = 0; i < _nonceLength; i++) {
+      nonce[i] = _secureRandom.nextUint8();
+    }
+    return nonce;
   }
 
-  /// Check if device key exists
+  String _generateSessionId() {
+    final bytes = Uint8List(16);
+    for (int i = 0; i < 16; i++) {
+      bytes[i] = _secureRandom.nextUint8();
+    }
+    return base64.encode(bytes);
+  }
+
+  Uint8List _generateHMAC(Uint8List key, Uint8List nonce, Uint8List data) {
+    final hmac = Hmac(sha256, key);
+    final combined = Uint8List(nonce.length + data.length);
+    combined.setRange(0, nonce.length, nonce);
+    combined.setRange(nonce.length, combined.length, data);
+    return Uint8List.fromList(hmac.convert(combined).bytes);
+  }
+
+  bool _constantTimeEquals(Uint8List a, Uint8List b) {
+    if (a.length != b.length) return false;
+
+    int result = 0;
+    for (int i = 0; i < a.length; i++) {
+      result |= a[i] ^ b[i];
+    }
+    return result == 0;
+  }
+
+  bool _needsKeyRotation(SyncSession session) {
+    final now = DateTime.now();
+    return now.difference(session.createdAt) > _keyRotationInterval;
+  }
+
+  Future<void> _rotateSessionKeys(String sessionId) async {
+    final session = _activeSessions[sessionId];
+    if (session == null) return;
+
+    // Generate new ephemeral key pair
+    final keyPair = _generateECDHKeyPair();
+
+    // For key rotation, we use the existing shared secret with a new salt
+    final rotationSalt = _generateNonce();
+    final info = utf8.encode('KeyRotation');
+
+    // Use HKDF-like derivation for key rotation
+    final hmacExtract = Hmac(sha256, rotationSalt);
+    final prk = hmacExtract.convert(session.encryptionKey).bytes;
+    final newKeys = _hkdfExpand(prk, info, 64);
+
+    // Clear old keys
+    session.encryptionKey.fillRange(0, session.encryptionKey.length, 0);
+    session.authenticationKey.fillRange(0, session.authenticationKey.length, 0);
+
+    // Update with new keys
+    session.encryptionKey = Uint8List.fromList(newKeys.sublist(0, 32));
+    session.authenticationKey = Uint8List.fromList(newKeys.sublist(32, 64));
+    session.ephemeralPublicKey = _encodePublicKey(keyPair.publicKey);
+    session.ephemeralPrivateKey = keyPair.privateKey;
+    session.createdAt = DateTime.now(); // Reset rotation timer
+  }
+
+  void _scheduleKeyRotation(String sessionId) {
+    Timer(_keyRotationInterval, () async {
+      if (_activeSessions.containsKey(sessionId)) {
+        await _rotateSessionKeys(sessionId);
+        _scheduleKeyRotation(sessionId); // Schedule next rotation
+      }
+    });
+  }
+
+  // Compatibility methods for existing sync protocol
+
+  /// Checks if a device key exists for sync
   bool hasDeviceKey(String deviceId) {
-    return _deviceKeys.containsKey(deviceId);
+    // Check if there's an active session for this device
+    return _activeSessions.values.any(
+      (session) => session.deviceId == deviceId,
+    );
   }
 
-  /// Get device key (for testing/debugging only)
-  Uint8List? getDeviceKey(String deviceId) {
-    return _deviceKeys[deviceId];
+  /// Encrypts sync data for transmission (compatibility method)
+  Future<EncryptedSyncPacket> encryptSyncDataCompat({
+    required String deviceId,
+    required Map<String, dynamic> data,
+  }) async {
+    // Find or create session for this device
+    SyncSession? session = _activeSessions.values
+        .where((s) => s.deviceId == deviceId)
+        .firstOrNull;
+
+    if (session == null) {
+      // For compatibility, create a session with a dummy public key
+      session = await createSyncSession(deviceId, 'dummy_key');
+    }
+
+    final encryptedData = await encryptSyncData(session.sessionId, data);
+
+    // Convert to EncryptedSyncPacket format
+    return EncryptedSyncPacket(
+      deviceId: deviceId,
+      nonce: encryptedData.nonce,
+      encryptedData: base64.decode(encryptedData.ciphertext),
+      signature: encryptedData.hmac,
+      timestamp: encryptedData.timestamp,
+    );
+  }
+
+  /// Decrypts sync data from transmission (compatibility method)
+  Future<Map<String, dynamic>> decryptSyncDataCompat({
+    required EncryptedSyncPacket packet,
+  }) async {
+    // Find session for this device
+    final session = _activeSessions.values
+        .where((s) => s.deviceId == packet.deviceId)
+        .firstOrNull;
+
+    if (session == null) {
+      throw Exception('No active session for device: ${packet.deviceId}');
+    }
+
+    // Convert from EncryptedSyncPacket format
+    final encryptedData = EncryptedSyncData(
+      sessionId: session.sessionId,
+      nonce: packet.nonce,
+      ciphertext: base64.encode(packet.encryptedData),
+      hmac: packet.signature,
+      timestamp: packet.timestamp,
+    );
+
+    return await decryptSyncData(encryptedData);
   }
 }
 
-/// Exception thrown when sync encryption operations fail
-class SyncEncryptionException implements Exception {
-  final String message;
-  final dynamic originalError;
+/// Represents an active sync session with ephemeral keys
+class SyncSession {
+  final String sessionId;
+  final String deviceId;
+  String ephemeralPublicKey;
+  ECPrivateKey ephemeralPrivateKey;
+  Uint8List encryptionKey;
+  Uint8List authenticationKey;
+  DateTime createdAt;
+  DateTime lastUsed;
 
-  const SyncEncryptionException(this.message, {this.originalError});
+  SyncSession({
+    required this.sessionId,
+    required this.deviceId,
+    required this.ephemeralPublicKey,
+    required this.ephemeralPrivateKey,
+    required this.encryptionKey,
+    required this.authenticationKey,
+    required this.createdAt,
+    required this.lastUsed,
+  });
+}
 
-  @override
-  String toString() {
-    return 'SyncEncryptionException: $message';
+/// Session keys derived from ECDH
+class SessionKeys {
+  final Uint8List encryptionKey;
+  final Uint8List authenticationKey;
+
+  SessionKeys({required this.encryptionKey, required this.authenticationKey});
+}
+
+/// Encrypted sync data with authentication
+class EncryptedSyncData {
+  final String sessionId;
+  final String nonce;
+  final String ciphertext;
+  final String hmac;
+  final DateTime timestamp;
+
+  EncryptedSyncData({
+    required this.sessionId,
+    required this.nonce,
+    required this.ciphertext,
+    required this.hmac,
+    required this.timestamp,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'sessionId': sessionId,
+    'nonce': nonce,
+    'ciphertext': ciphertext,
+    'hmac': hmac,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory EncryptedSyncData.fromJson(Map<String, dynamic> json) =>
+      EncryptedSyncData(
+        sessionId: json['sessionId'],
+        nonce: json['nonce'],
+        ciphertext: json['ciphertext'],
+        hmac: json['hmac'],
+        timestamp: DateTime.parse(json['timestamp']),
+      );
+}
+
+/// Public session information (no sensitive data)
+class SyncSessionInfo {
+  final String sessionId;
+  final String deviceId;
+  final DateTime createdAt;
+  final DateTime lastUsed;
+
+  SyncSessionInfo({
+    required this.sessionId,
+    required this.deviceId,
+    required this.createdAt,
+    required this.lastUsed,
+  });
+}
+
+// Compatibility methods for existing sync protocol
+
+extension SyncEncryptionServiceCompat on SyncEncryptionService {
+  /// Checks if a device key exists for sync
+  bool hasDeviceKey(String deviceId) {
+    // Check if there's an active session for this device
+    return _activeSessions.values.any(
+      (session) => session.deviceId == deviceId,
+    );
+  }
+
+  /// Encrypts sync data for transmission (compatibility method)
+  Future<EncryptedSyncPacket> encryptSyncDataCompat({
+    required String deviceId,
+    required Map<String, dynamic> data,
+  }) async {
+    // Find or create session for this device
+    SyncSession? session = _activeSessions.values
+        .where((s) => s.deviceId == deviceId)
+        .firstOrNull;
+
+    if (session == null) {
+      // For compatibility, create a session with a dummy public key
+      session = await createSyncSession(deviceId, 'dummy_key');
+    }
+
+    final encryptedData = await encryptSyncData(session.sessionId, data);
+
+    // Convert to EncryptedSyncPacket format
+    return EncryptedSyncPacket(
+      deviceId: deviceId,
+      nonce: encryptedData.nonce,
+      encryptedData: base64.decode(encryptedData.ciphertext),
+      signature: encryptedData.hmac,
+      timestamp: encryptedData.timestamp,
+    );
+  }
+
+  /// Decrypts sync data from transmission (compatibility method)
+  Future<Map<String, dynamic>> decryptSyncDataCompat({
+    required EncryptedSyncPacket packet,
+  }) async {
+    // Find session for this device
+    final session = _activeSessions.values
+        .where((s) => s.deviceId == packet.deviceId)
+        .firstOrNull;
+
+    if (session == null) {
+      throw Exception('No active session for device: ${packet.deviceId}');
+    }
+
+    // Convert from EncryptedSyncPacket format
+    final encryptedData = EncryptedSyncData(
+      sessionId: session.sessionId,
+      nonce: packet.nonce,
+      ciphertext: base64.encode(packet.encryptedData),
+      hmac: packet.signature,
+      timestamp: packet.timestamp,
+    );
+
+    return await decryptSyncData(encryptedData);
   }
 }

@@ -115,7 +115,7 @@ class SyncProtocolService {
       );
 
       // Encrypt and send request
-      final encryptedPacket = await _encryptionService.encryptSyncData(
+      final encryptedPacket = await _encryptionService.encryptSyncDataCompat(
         deviceId: deviceId,
         data: request.toJson(),
       );
@@ -225,7 +225,7 @@ class SyncProtocolService {
         final responseData = jsonDecode(responseBody);
         final encryptedResponse = EncryptedSyncPacket.fromJson(responseData);
 
-        final decryptedData = await _encryptionService.decryptSyncData(
+        final decryptedData = await _encryptionService.decryptSyncDataCompat(
           packet: encryptedResponse,
         );
 
@@ -294,7 +294,7 @@ class SyncProtocolService {
         final encryptedPacket = EncryptedSyncPacket.fromJson(data);
 
         // Decrypt request
-        final decryptedData = await _encryptionService.decryptSyncData(
+        final decryptedData = await _encryptionService.decryptSyncDataCompat(
           packet: encryptedPacket,
         );
 
@@ -304,10 +304,11 @@ class SyncProtocolService {
         final response = await _processSyncRequest(syncRequest);
 
         // Encrypt response
-        final encryptedResponse = await _encryptionService.encryptSyncData(
-          deviceId: syncRequest.deviceId,
-          data: response.toJson(),
-        );
+        final encryptedResponse = await _encryptionService
+            .encryptSyncDataCompat(
+              deviceId: syncRequest.deviceId,
+              data: response.toJson(),
+            );
 
         // Send response
         request.response.statusCode = 200;

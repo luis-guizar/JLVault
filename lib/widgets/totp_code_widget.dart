@@ -23,8 +23,7 @@ class TOTPCodeWidget extends StatefulWidget {
 
 class _TOTPCodeWidgetState extends State<TOTPCodeWidget>
     with TickerProviderStateMixin {
-  late StreamSubscription<String> _codeSubscription;
-  late StreamSubscription<int> _remainingSubscription;
+  Timer? _updateTimer;
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
 
@@ -45,40 +44,31 @@ class _TOTPCodeWidgetState extends State<TOTPCodeWidget>
       CurvedAnimation(parent: _progressController, curve: Curves.linear),
     );
 
-    _initializeStreams();
+    _updateCode();
+    _startTimer();
+  }
+
+  void _updateCode() {
+    if (!mounted) return;
+
+    final code = TOTPGenerator.generateCode(widget.config);
+    final remaining = TOTPGenerator.getRemainingSeconds(widget.config);
+    final expiring = remaining <= 10;
+
+    setState(() {
+      _currentCode = code;
+      _remainingSeconds = remaining;
+      _isExpiringSoon = expiring;
+    });
+
     _updateProgress();
   }
 
-  void _initializeStreams() {
-    // Initialize with current values
-    _currentCode = TOTPGenerator.generateCode(widget.config);
-    _remainingSeconds = TOTPGenerator.getRemainingSeconds(widget.config);
-    _isExpiringSoon = _remainingSeconds <= 10;
-
-    // Listen to code changes
-    _codeSubscription = TOTPGenerator.getCodeStream(widget.config).listen((
-      code,
-    ) {
-      if (mounted) {
-        setState(() {
-          _currentCode = code;
-        });
-        _updateProgress();
-      }
+  void _startTimer() {
+    _updateTimer?.cancel();
+    _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateCode();
     });
-
-    // Listen to remaining seconds changes
-    _remainingSubscription =
-        TOTPGenerator.getRemainingSecondsStream(widget.config).listen((
-          remaining,
-        ) {
-          if (mounted) {
-            setState(() {
-              _remainingSeconds = remaining;
-              _isExpiringSoon = remaining <= 10;
-            });
-          }
-        });
   }
 
   void _updateProgress() {
@@ -270,8 +260,7 @@ class _TOTPCodeWidgetState extends State<TOTPCodeWidget>
 
   @override
   void dispose() {
-    _codeSubscription.cancel();
-    _remainingSubscription.cancel();
+    _updateTimer?.cancel();
     _progressController.dispose();
     super.dispose();
   }
@@ -289,9 +278,7 @@ class CompactTOTPCodeWidget extends StatefulWidget {
 }
 
 class _CompactTOTPCodeWidgetState extends State<CompactTOTPCodeWidget> {
-  late StreamSubscription<String> _codeSubscription;
-  late StreamSubscription<int> _remainingSubscription;
-
+  Timer? _updateTimer;
   String _currentCode = '';
   int _remainingSeconds = 0;
   bool _isExpiringSoon = false;
@@ -299,34 +286,29 @@ class _CompactTOTPCodeWidgetState extends State<CompactTOTPCodeWidget> {
   @override
   void initState() {
     super.initState();
+    _updateCode();
+    _startTimer();
+  }
 
-    // Initialize with current values
-    _currentCode = TOTPGenerator.generateCode(widget.config);
-    _remainingSeconds = TOTPGenerator.getRemainingSeconds(widget.config);
-    _isExpiringSoon = _remainingSeconds <= 10;
+  void _updateCode() {
+    if (!mounted) return;
 
-    // Listen to changes
-    _codeSubscription = TOTPGenerator.getCodeStream(widget.config).listen((
-      code,
-    ) {
-      if (mounted) {
-        setState(() {
-          _currentCode = code;
-        });
-      }
+    final code = TOTPGenerator.generateCode(widget.config);
+    final remaining = TOTPGenerator.getRemainingSeconds(widget.config);
+    final expiring = remaining <= 10;
+
+    setState(() {
+      _currentCode = code;
+      _remainingSeconds = remaining;
+      _isExpiringSoon = expiring;
     });
+  }
 
-    _remainingSubscription =
-        TOTPGenerator.getRemainingSecondsStream(widget.config).listen((
-          remaining,
-        ) {
-          if (mounted) {
-            setState(() {
-              _remainingSeconds = remaining;
-              _isExpiringSoon = remaining <= 10;
-            });
-          }
-        });
+  void _startTimer() {
+    _updateTimer?.cancel();
+    _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateCode();
+    });
   }
 
   @override
@@ -394,8 +376,7 @@ class _CompactTOTPCodeWidgetState extends State<CompactTOTPCodeWidget> {
 
   @override
   void dispose() {
-    _codeSubscription.cancel();
-    _remainingSubscription.cancel();
+    _updateTimer?.cancel();
     super.dispose();
   }
 }

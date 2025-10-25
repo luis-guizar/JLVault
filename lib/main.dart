@@ -179,14 +179,14 @@ class _PasswordManagerAppState extends State<PasswordManagerApp>
     _lastAuthenticationTime = DateTime.now();
     // Set a dummy master password for encryption service
     // In a real app, this would be the user's actual master password
-    _encryptionService?.setMasterPassword('user_master_password');
+    VaultEncryptionService.setMasterPassword('user_master_password');
     setState(() {
       _isAuthenticated = true;
     });
   }
 
   void _onLogout() {
-    _encryptionService?.clearMasterPassword();
+    VaultEncryptionService.clearMasterPassword();
     setState(() {
       _isAuthenticated = false;
     });

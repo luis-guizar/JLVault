@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:argon2/argon2.dart';
 
 /// Manages encryption keys and operations for multiple vaults
 class VaultCryptoManager {
@@ -11,7 +10,7 @@ class VaultCryptoManager {
   static const _masterKeyPrefix = 'vault_key_';
   static const _saltPrefix = 'vault_salt_';
 
-  /// Derives a vault-specific encryption key from master password and vault salt
+  /// Derives a vault-specific encryption key from master password and vault salt using Argon2id
   static Future<encrypt.Key> _deriveVaultKey(
     String masterPassword,
     String vaultId,
@@ -27,7 +26,7 @@ class VaultCryptoManager {
     }
 
     if (saltBase64 == null) {
-      // Generate new salt for this vault
+      // Generate new 32-byte salt for this vault
       final salt = encrypt.Key.fromSecureRandom(32);
       await _storage.write(key: saltKey, value: salt.base64);
       saltBase64 = salt.base64;
@@ -35,56 +34,25 @@ class VaultCryptoManager {
 
     final salt = base64.decode(saltBase64);
 
-    // Use PBKDF2 to derive key from master password + vault salt
-    final key = _pbkdf2(masterPassword, salt, 100000, 32);
-    return encrypt.Key(key);
-  }
+    // Use Argon2id to derive key from master password + vault salt
+    // Parameters: memory: 64MB, iterations: 3, parallelism: 1, key length: 32 bytes
+    final parameters = Argon2Parameters(
+      Argon2Parameters.ARGON2_id, // Argon2id variant
+      salt,
+      version: Argon2Parameters.ARGON2_VERSION_13,
+      iterations: 3,
+      memoryPowerOf2: 16, // 2^16 = 65536 KB = 64MB
+      lanes: 1, // parallelism
+    );
 
-  /// PBKDF2 key derivation function
-  static Uint8List _pbkdf2(
-    String password,
-    Uint8List salt,
-    int iterations,
-    int keyLength,
-  ) {
-    final hmac = Hmac(sha256, utf8.encode(password));
-    final blocks = <int>[];
+    final argon2Generator = Argon2BytesGenerator();
+    argon2Generator.init(parameters);
 
-    for (int i = 1; i <= (keyLength / 32).ceil(); i++) {
-      final block = _pbkdf2Block(hmac, salt, iterations, i);
-      blocks.addAll(block);
-    }
+    final passwordBytes = parameters.converter.convert(masterPassword);
+    final keyBytes = Uint8List(32); // 256-bit key
+    argon2Generator.generateBytes(passwordBytes, keyBytes, 0, keyBytes.length);
 
-    return Uint8List.fromList(blocks.take(keyLength).toList());
-  }
-
-  static List<int> _pbkdf2Block(
-    Hmac hmac,
-    Uint8List salt,
-    int iterations,
-    int blockIndex,
-  ) {
-    final u = List<int>.filled(32, 0);
-    final saltWithIndex = Uint8List(salt.length + 4);
-    saltWithIndex.setRange(0, salt.length, salt);
-    saltWithIndex.setRange(salt.length, salt.length + 4, [
-      (blockIndex >> 24) & 0xff,
-      (blockIndex >> 16) & 0xff,
-      (blockIndex >> 8) & 0xff,
-      blockIndex & 0xff,
-    ]);
-
-    var ui = hmac.convert(saltWithIndex).bytes;
-    u.setRange(0, ui.length, ui);
-
-    for (int i = 1; i < iterations; i++) {
-      ui = hmac.convert(ui).bytes;
-      for (int j = 0; j < u.length; j++) {
-        u[j] ^= ui[j];
-      }
-    }
-
-    return u;
+    return encrypt.Key(keyBytes);
   }
 
   /// Gets or creates the encryption key for a specific vault
@@ -110,39 +78,56 @@ class VaultCryptoManager {
     return key;
   }
 
-  /// Encrypts text using vault-specific key
+  /// Encrypts text using vault-specific key with AES-256-GCM
   static Future<String> encryptForVault(
     String plainText,
     String vaultId,
     String masterPassword,
   ) async {
     final key = await getVaultKey(vaultId, masterPassword);
-    final iv = encrypt.IV.fromSecureRandom(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
+    final iv = encrypt.IV.fromSecureRandom(12); // GCM uses 12-byte IV
+    final encrypter = encrypt.Encrypter(
+      encrypt.AES(key, mode: encrypt.AESMode.gcm),
+    );
     final encrypted = encrypter.encrypt(plainText, iv: iv);
     return '${iv.base64}:${encrypted.base64}';
   }
 
-  /// Decrypts text using vault-specific key
+  /// Decrypts text using vault-specific key with AES-256-GCM
   static Future<String> decryptForVault(
     String cipherText,
     String vaultId,
     String masterPassword,
   ) async {
     final key = await getVaultKey(vaultId, masterPassword);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
 
     final parts = cipherText.split(':');
     if (parts.length == 2) {
       try {
         final iv = encrypt.IV.fromBase64(parts[0]);
-        return encrypter.decrypt64(parts[1], iv: iv);
+
+        // Try GCM mode first (new format)
+        try {
+          final encrypter = encrypt.Encrypter(
+            encrypt.AES(key, mode: encrypt.AESMode.gcm),
+          );
+          return encrypter.decrypt64(parts[1], iv: iv);
+        } catch (e) {
+          // Fall back to CBC mode for backward compatibility
+          final encrypter = encrypt.Encrypter(
+            encrypt.AES(key, mode: encrypt.AESMode.cbc),
+          );
+          return encrypter.decrypt64(parts[1], iv: iv);
+        }
       } catch (e) {
         // Fall back to legacy decryption for backward compatibility
       }
     }
 
-    // Legacy decryption without IV
+    // Legacy decryption without IV (CBC mode)
+    final encrypter = encrypt.Encrypter(
+      encrypt.AES(key, mode: encrypt.AESMode.cbc),
+    );
     final iv = encrypt.IV.fromLength(16);
     return encrypter.decrypt64(cipherText, iv: iv);
   }

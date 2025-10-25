@@ -69,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final encryptedAccounts = await DBHelper.getAllForVault(
         _currentVault!.id,
       );
-      final decryptedAccounts = await widget.encryptionService.decryptAccounts(
+      final decryptedAccounts = await VaultEncryptionService.decryptAccounts(
         encryptedAccounts,
       );
 
