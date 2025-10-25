@@ -543,7 +543,14 @@ class ComprehensiveSecurityService {
     AlertStatistics alertStats,
     List<ThreatIndicator> threatIndicators,
   ) {
+    // Start with base score from audit result, but ensure it's realistic
     double overallScore = auditResult.overallScore.toDouble();
+
+    // If no meaningful data exists, start with a lower baseline
+    if (auditResult.overallScore == 100 && auditResult.issues.isEmpty) {
+      // This might indicate no real security assessment was done
+      overallScore = 50.0; // Start with neutral score
+    }
 
     // Adjust score based on various factors
     if (authAnalysis.riskScore > 0.7) {

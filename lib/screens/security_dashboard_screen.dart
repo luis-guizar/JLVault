@@ -6,6 +6,8 @@ import '../services/security_analyzer.dart';
 import '../services/feature_gate_factory.dart';
 import '../services/license_manager_factory.dart';
 import '../services/development_helpers.dart';
+import '../services/vault_manager.dart';
+import '../data/db_helper.dart';
 import '../widgets/security_score_card.dart';
 import '../widgets/security_issues_list.dart';
 import '../widgets/security_recommendations_list.dart';
@@ -15,8 +17,9 @@ import 'hibp_import_screen.dart';
 
 class SecurityDashboardScreen extends StatefulWidget {
   final String? vaultId;
+  final VaultManager? vaultManager;
 
-  const SecurityDashboardScreen({super.key, this.vaultId});
+  const SecurityDashboardScreen({super.key, this.vaultId, this.vaultManager});
 
   @override
   State<SecurityDashboardScreen> createState() =>
@@ -36,8 +39,47 @@ class _SecurityDashboardScreenState extends State<SecurityDashboardScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _currentVaultId = widget.vaultId ?? 'default';
     _checkPremiumAccess();
+    _initializeVaultId();
+  }
+
+  Future<void> _initializeVaultId() async {
+    if (widget.vaultId != null) {
+      _currentVaultId = widget.vaultId!;
+      print(
+        'SecurityDashboardScreen: Using provided vault ID: $_currentVaultId',
+      );
+    } else if (widget.vaultManager != null) {
+      try {
+        final activeVault = await widget.vaultManager!.getActiveVault();
+        _currentVaultId = activeVault?.id ?? 'default';
+        print('SecurityDashboardScreen: Got active vault ID: $_currentVaultId');
+      } catch (e) {
+        print('SecurityDashboardScreen: Error getting active vault: $e');
+        _currentVaultId = 'default';
+      }
+    } else {
+      // Try to get the active vault from database directly
+      print(
+        'SecurityDashboardScreen: No vault manager provided, trying to get active vault from database',
+      );
+      try {
+        // Get all accounts and use the vault ID from the first account as a fallback
+        final allAccounts = await DBHelper.getAll();
+        if (allAccounts.isNotEmpty) {
+          _currentVaultId = allAccounts.first.vaultId;
+          print(
+            'SecurityDashboardScreen: Using vault ID from first account: $_currentVaultId',
+          );
+        } else {
+          print('SecurityDashboardScreen: No accounts found, using default');
+          _currentVaultId = 'default';
+        }
+      } catch (e) {
+        print('SecurityDashboardScreen: Error getting accounts: $e');
+        _currentVaultId = 'default';
+      }
+    }
     _loadSecurityReport();
   }
 
@@ -60,7 +102,10 @@ class _SecurityDashboardScreenState extends State<SecurityDashboardScreen>
     });
 
     try {
-      final report = await SecurityAnalyzer.analyzeVault(_currentVaultId);
+      // The SecurityAnalyzer will handle the 'default' vault ID with fallback logic
+      String vaultIdToUse = _currentVaultId;
+
+      final report = await SecurityAnalyzer.analyzeVault(vaultIdToUse);
       setState(() {
         _securityReport = report;
         _isLoading = false;

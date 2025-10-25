@@ -502,33 +502,45 @@ class _CreateVaultDialogState extends State<CreateVaultDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Create New Vault'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Vault Name',
-                hintText: 'Enter vault name',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter a vault name';
-                }
-                if (value.trim().length < 2) {
-                  return 'Vault name must be at least 2 characters';
-                }
-                return null;
-              },
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Vault Name',
+                    hintText: 'Enter vault name',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter a vault name';
+                    }
+                    if (value.trim().length < 2) {
+                      return 'Vault name must be at least 2 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildIconSelector(),
+                const SizedBox(height: 16),
+                _buildColorSelector(),
+                // Add extra space to ensure content is accessible above keyboard
+                SizedBox(
+                  height: MediaQuery.of(context).viewInsets.bottom > 0 ? 50 : 0,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildIconSelector(),
-            const SizedBox(height: 16),
-            _buildColorSelector(),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -708,33 +720,45 @@ class _EditVaultDialogState extends State<EditVaultDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Edit Vault'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Vault Name',
-                hintText: 'Enter vault name',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter a vault name';
-                }
-                if (value.trim().length < 2) {
-                  return 'Vault name must be at least 2 characters';
-                }
-                return null;
-              },
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Vault Name',
+                    hintText: 'Enter vault name',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter a vault name';
+                    }
+                    if (value.trim().length < 2) {
+                      return 'Vault name must be at least 2 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildIconSelector(),
+                const SizedBox(height: 16),
+                _buildColorSelector(),
+                // Add extra space to ensure content is accessible above keyboard
+                SizedBox(
+                  height: MediaQuery.of(context).viewInsets.bottom > 0 ? 50 : 0,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildIconSelector(),
-            const SizedBox(height: 16),
-            _buildColorSelector(),
-          ],
+          ),
         ),
       ),
       actions: [

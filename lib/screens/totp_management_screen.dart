@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/account.dart';
 import '../models/totp_config.dart';
-import '../models/premium_feature.dart';
 
 import '../widgets/totp_code_widget.dart';
 import '../widgets/time_sync_warning_widget.dart';
-import '../widgets/feature_gate_wrapper.dart';
 import '../screens/totp_setup_screen.dart';
 import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
 import '../services/platform_crypto_service.dart';
 import '../services/crypto_isolate_service.dart';
-import '../services/feature_gate_factory.dart';
-import '../services/license_manager_factory.dart';
 import '../data/db_helper.dart';
 import '../services/time_sync_service.dart';
 
@@ -38,9 +35,6 @@ class TOTPManagementScreen extends StatefulWidget {
 class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
   List<Account> _allAccounts = [];
   bool _isLoading = true;
-  late final _featureGate = FeatureGateFactory.create(
-    LicenseManagerFactory.getInstance(),
-  );
 
   @override
   void initState() {
@@ -126,7 +120,29 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TOTP Authenticator'),
+        title: Row(
+          children: [
+            const Text('TOTP Authenticator'),
+            if (kDebugMode) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'DEBUG',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           IconButton(
             onPressed: _showTimeSyncInfo,
@@ -135,20 +151,11 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
           ),
         ],
       ),
-      body: FeatureGateWrapper(
-        feature: PremiumFeature.totpGenerator,
-        featureGate: _featureGate,
-        showPreviewScreen: true,
-        child: _buildBody(),
-      ),
-      floatingActionButton: FeatureGateWrapper(
-        feature: PremiumFeature.totpGenerator,
-        featureGate: _featureGate,
-        child: FloatingActionButton(
-          onPressed: _addTOTPToAccount,
-          tooltip: 'Add TOTP to account',
-          child: const Icon(Icons.add),
-        ),
+      body: _buildBody(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addTOTPToAccount,
+        tooltip: 'Add TOTP to account',
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -160,6 +167,7 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
 
     return Column(
       children: [
+        if (kDebugMode) _buildDebugModeBanner(),
         const TimeSyncWarningWidget(),
         Expanded(
           child: _accountsWithTOTP.isEmpty && _accountsWithoutTOTP.isEmpty
@@ -167,6 +175,35 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
               : _buildAccountsList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildDebugModeBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.developer_mode, color: Colors.green, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Debug Mode: All TOTP features are unlocked for development',
+              style: TextStyle(
+                color: Colors.green.shade700,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -18,7 +18,8 @@ class SecurityScoringService {
     List<Account> accounts,
     Map<String, BreachCheckResult>? breachResults,
   ) async {
-    if (accounts.isEmpty) return 100.0;
+    // Handle empty password database - return 0% instead of 100%
+    if (accounts.isEmpty) return 0.0;
 
     double totalScore = 0.0;
     int accountCount = accounts.length;
@@ -99,13 +100,14 @@ class SecurityScoringService {
     List<Account> accounts,
     Map<String, BreachCheckResult>? breachResults,
   ) async {
+    // Handle empty password database - return 0% for all categories
     if (accounts.isEmpty) {
       return {
-        SecurityCategory.passwordStrength: 100,
-        SecurityCategory.passwordReuse: 100,
-        SecurityCategory.breaches: 100,
-        SecurityCategory.passwordAge: 100,
-        SecurityCategory.twoFactor: 100,
+        SecurityCategory.passwordStrength: 0,
+        SecurityCategory.passwordReuse: 0,
+        SecurityCategory.breaches: 0,
+        SecurityCategory.passwordAge: 0,
+        SecurityCategory.twoFactor: 0,
       };
     }
 

@@ -14,12 +14,24 @@ class FeatureGateFactory {
 
   /// Creates a FeatureGate instance appropriate for the current platform
   static FeatureGate create(LicenseManager licenseManager) {
+    if (kDebugMode) {
+      debugPrint(
+        '🏭 FeatureGateFactory: Creating feature gate - Debug mode: $kDebugMode, Development mode: $_developmentMode',
+      );
+    }
+
     // Use development feature gate in debug mode to unlock all features
     if (_developmentMode) {
+      if (kDebugMode) {
+        debugPrint('🏭 FeatureGateFactory: Creating DevelopmentFeatureGate');
+      }
       return DevelopmentFeatureGate(licenseManager);
     }
 
     if (Platform.isAndroid) {
+      if (kDebugMode) {
+        debugPrint('🏭 FeatureGateFactory: Creating AndroidFeatureGate');
+      }
       return AndroidFeatureGate(licenseManager);
     } else {
       throw UnsupportedError(

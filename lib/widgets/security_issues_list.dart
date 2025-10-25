@@ -141,7 +141,9 @@ class SecurityIssuesList extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: (priorityInfo['color'] as Color).withOpacity(0.1),
+                      color: (priorityInfo['color'] as Color).withValues(
+                        alpha: 0.1,
+                      ),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

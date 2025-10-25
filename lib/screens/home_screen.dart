@@ -18,6 +18,7 @@ import '../widgets/account_title.dart';
 import '../widgets/vault_switcher.dart';
 import '../widgets/feature_gate_wrapper.dart';
 import '../widgets/upgrade_prompt_dialog.dart';
+
 import 'add_edit_screen.dart';
 import 'vault_management_screen.dart';
 
@@ -382,6 +383,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildMainContent() {
+    return _filteredAccounts.isEmpty
+        ? _buildEmptyState()
+        : _buildAccountsList();
+  }
+
   Widget _buildAccountsList() {
     return RefreshIndicator(
       onRefresh: _loadAccounts,
@@ -447,77 +454,104 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         elevation: 0,
         actions: [
-          // Password limit indicator
-          StreamBuilder<Map<PremiumFeature, bool>>(
-            stream: _featureGate.accessStream,
-            initialData: _featureGate.currentAccess,
-            builder: (context, snapshot) {
-              return PasswordLimitIndicator(
-                featureGate: _featureGate,
-                currentCount: _accounts.length,
-                showUpgradeButton: true,
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          // Vault management - still useful in app bar for quick access
-          IconButton(
-            icon: const Icon(Icons.folder_open),
-            onPressed: _navigateToVaultManagement,
-            tooltip: 'Gestionar bóvedas',
-          ),
-          // Lock app - important security action
-          IconButton(
-            icon: const Icon(Icons.lock_outline),
-            onPressed: () {
-              widget.onLogout?.call();
-            },
-            tooltip: 'Bloquear aplicación',
-          ),
-          // Overflow menu for less common actions
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'test_crypto':
-                  _testPlatformCrypto();
-                  break;
-                case 'about':
-                  showAboutDialog(
-                    context: context,
-                    applicationName: 'Simple Vault',
-                    applicationVersion: '1.0.0',
-                    applicationIcon: const Icon(Icons.lock, size: 48),
-                    children: [
-                      const Text(
-                        'Un gestor de contraseñas seguro y offline que almacena tus credenciales localmente con cifrado.',
+          // Use Flexible to prevent overflow and allow responsive sizing
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Password limit indicator with constraints
+                Flexible(
+                  child: StreamBuilder<Map<PremiumFeature, bool>>(
+                    stream: _featureGate.accessStream,
+                    initialData: _featureGate.currentAccess,
+                    builder: (context, snapshot) {
+                      return PasswordLimitIndicator(
+                        featureGate: _featureGate,
+                        currentCount: _accounts.length,
+                        showUpgradeButton: true,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Vault management - still useful in app bar for quick access
+                IconButton(
+                  icon: const Icon(Icons.folder_open),
+                  onPressed: _navigateToVaultManagement,
+                  tooltip: 'Gestionar bóvedas',
+                ),
+                // Lock app - important security action
+                IconButton(
+                  icon: const Icon(Icons.lock_outline),
+                  onPressed: () {
+                    widget.onLogout?.call();
+                  },
+                  tooltip: 'Bloquear aplicación',
+                ),
+                // Overflow menu for less common actions with proper constraints
+                PopupMenuButton<String>(
+                  constraints: BoxConstraints(
+                    minWidth: 200,
+                    maxWidth: MediaQuery.of(context).size.width * 0.8,
+                    maxHeight: MediaQuery.of(context).size.height * 0.6,
+                  ),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'test_crypto':
+                        _testPlatformCrypto();
+                        break;
+                      case 'about':
+                        showAboutDialog(
+                          context: context,
+                          applicationName: 'Simple Vault',
+                          applicationVersion: '1.0.0',
+                          applicationIcon: const Icon(Icons.lock, size: 48),
+                          children: [
+                            const Text(
+                              'Un gestor de contraseñas seguro y offline que almacena tus credenciales localmente con cifrado.',
+                            ),
+                          ],
+                        );
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'test_crypto',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.speed),
+                          SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Test Crypto Performance',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  );
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'test_crypto',
-                child: Row(
-                  children: [
-                    Icon(Icons.speed),
-                    SizedBox(width: 8),
-                    Text('Test Crypto Performance'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'about',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.info_outline),
+                          SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Acerca de',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'about',
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline),
-                    SizedBox(width: 8),
-                    Text('Acerca de'),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
         bottom: PreferredSize(
@@ -548,9 +582,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _filteredAccounts.isEmpty
-          ? _buildEmptyState()
-          : _buildAccountsList(),
+          : _buildMainContent(),
       floatingActionButton: StreamBuilder<Map<PremiumFeature, bool>>(
         stream: _featureGate.accessStream,
         initialData: _featureGate.currentAccess,

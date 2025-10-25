@@ -332,9 +332,11 @@ class _AddEditScreenState extends State<AddEditScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      border: Border.all(
+                        color: Colors.green.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Text(
                       'Configured',
@@ -474,10 +476,16 @@ class _AddEditScreenState extends State<AddEditScreen> {
         title: Text(_isEditing ? 'Edit Account' : 'Add Account'),
         elevation: 0,
       ),
+      resizeToAvoidBottomInset: true,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -535,33 +543,36 @@ class _AddEditScreenState extends State<AddEditScreen> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            suffixIcon: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
+                            suffixIcon: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 140),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility
+                                          : Icons.visibility_off,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                    tooltip: 'Mostrar/Ocultar contraseña',
                                   ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                  tooltip: 'Mostrar/Ocultar contraseña',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.refresh),
-                                  onPressed: _generateQuickPassword,
-                                  tooltip: 'Generar rápido',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.tune),
-                                  onPressed: _showPasswordGenerator,
-                                  tooltip: 'Generador avanzado',
-                                ),
-                              ],
+                                  IconButton(
+                                    icon: const Icon(Icons.refresh),
+                                    onPressed: _generateQuickPassword,
+                                    tooltip: 'Generar rápido',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.tune),
+                                    onPressed: _showPasswordGenerator,
+                                    tooltip: 'Generador avanzado',
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           validator: (value) {
@@ -614,6 +625,12 @@ class _AddEditScreenState extends State<AddEditScreen> {
                           ),
                         ),
                       ),
+                    // Extra space to ensure content is accessible above keyboard
+                    SizedBox(
+                      height: MediaQuery.of(context).viewInsets.bottom > 0
+                          ? 100
+                          : 20,
+                    ),
                   ],
                 ),
               ),

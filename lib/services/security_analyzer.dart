@@ -10,19 +10,19 @@ import 'security_scoring_service.dart';
 class SecurityAnalyzer {
   /// Analyzes security for a specific vault and generates a comprehensive report
   static Future<SecurityReport> analyzeVault(String vaultId) async {
-    final accounts = await DBHelper.getAllForVault(vaultId);
+    var accounts = await DBHelper.getAllForVault(vaultId);
 
     if (accounts.isEmpty) {
       return SecurityReport(
         vaultId: vaultId,
-        overallScore: 100.0,
+        overallScore: 0.0, // 0% for empty vault
         issues: [],
         categoryScores: {
-          SecurityCategory.passwordStrength: 100,
-          SecurityCategory.passwordReuse: 100,
-          SecurityCategory.breaches: 100,
-          SecurityCategory.passwordAge: 100,
-          SecurityCategory.twoFactor: 100,
+          SecurityCategory.passwordStrength: 0,
+          SecurityCategory.passwordReuse: 0,
+          SecurityCategory.breaches: 0,
+          SecurityCategory.passwordAge: 0,
+          SecurityCategory.twoFactor: 0,
         },
         recommendations: [],
         generatedAt: DateTime.now(),
@@ -133,7 +133,7 @@ class SecurityAnalyzer {
   static Future<double> calculateSecurityScore(String vaultId) async {
     final accounts = await DBHelper.getAllForVault(vaultId);
 
-    if (accounts.isEmpty) return 100.0;
+    if (accounts.isEmpty) return 0.0; // Changed from 100.0 to 0.0
 
     // For quick score calculation, we'll skip breach checking
     // and use cached results if available
@@ -197,7 +197,7 @@ class SecurityAnalyzer {
         'weakPasswords': 0,
         'reusedPasswords': 0,
         'accountsWithTwoFactor': 0,
-        'estimatedScore': 100.0,
+        'estimatedScore': 0.0, // Changed from 100.0 to 0.0
       };
     }
 
@@ -222,10 +222,12 @@ class SecurityAnalyzer {
 
     // Quick score estimation without breach checking
     double estimatedScore = 100.0;
-    if (weakPasswords > 0)
+    if (weakPasswords > 0) {
       estimatedScore -= (weakPasswords / accounts.length) * 40;
-    if (reusedAccountIds.isNotEmpty)
+    }
+    if (reusedAccountIds.isNotEmpty) {
       estimatedScore -= (reusedAccountIds.length / accounts.length) * 25;
+    }
 
     return {
       'totalAccounts': accounts.length,

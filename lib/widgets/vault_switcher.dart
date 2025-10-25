@@ -139,48 +139,56 @@ class _VaultSwitcherState extends State<VaultSwitcher> {
                   final isActive = vault.id == widget.currentVault?.id;
 
                   return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
                     leading: Container(
-                      width: 40,
-                      height: 40,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
-                        color: vault.color.withOpacity(0.1),
+                        color: vault.color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: vault.color.withOpacity(0.3),
+                          color: vault.color.withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
                       child: Icon(
                         VaultIcons.getIcon(vault.iconName),
                         color: vault.color,
-                        size: 20,
+                        size: 18,
                       ),
                     ),
                     title: Row(
                       children: [
                         Expanded(
+                          flex: 3,
                           child: Text(
                             vault.name,
                             overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 14),
                           ),
                         ),
                         if (isActive) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: vault.color.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'Active',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: vault.color,
-                                fontWeight: FontWeight.w500,
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: vault.color.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'Active',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: vault.color,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ),
@@ -189,7 +197,7 @@ class _VaultSwitcherState extends State<VaultSwitcher> {
                     ),
                     subtitle: Text(
                       '${vault.passwordCount} passwords • ${vault.securityScore.toInt()}% secure',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                       overflow: TextOverflow.ellipsis,
                     ),
                     onTap: () => _switchVault(vault),
@@ -255,10 +263,10 @@ class _VaultAuthenticationDialogState extends State<VaultAuthenticationDialog> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: widget.vault.color.withOpacity(0.1),
+              color: widget.vault.color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: widget.vault.color.withOpacity(0.3),
+                color: widget.vault.color.withValues(alpha: 0.3),
                 width: 1,
               ),
             ),

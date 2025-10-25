@@ -52,7 +52,9 @@ class FeatureGateWrapper extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -263,24 +265,29 @@ class PasswordLimitIndicator extends StatelessWidget {
         final status = snapshot.data ?? LicenseStatus.free;
 
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          constraints: const BoxConstraints(maxWidth: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.green.withOpacity(0.3)),
+            color: Colors.green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.all_inclusive, size: 16, color: Colors.green),
-              const SizedBox(width: 4),
-              Text(
-                status == LicenseStatus.trial
-                    ? 'Trial: Unlimited ($currentCount)'
-                    : 'Premium: Unlimited ($currentCount)',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.green,
-                  fontWeight: FontWeight.w500,
+              Icon(Icons.all_inclusive, size: 14, color: Colors.green),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  status == LicenseStatus.trial
+                      ? '∞ ($currentCount)'
+                      : '∞ ($currentCount)',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.green,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 11,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -305,42 +312,47 @@ class PasswordLimitIndicator extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      constraints: const BoxConstraints(maxWidth: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: indicatorColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: indicatorColor.withOpacity(0.3)),
+        color: indicatorColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: indicatorColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             hasReachedLimit ? Icons.warning : Icons.storage,
-            size: 16,
+            size: 14,
             color: indicatorColor,
           ),
-          const SizedBox(width: 4),
-          Text(
-            '$currentCount/$limit passwords',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: indicatorColor,
-              fontWeight: FontWeight.w500,
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              '$currentCount/$limit',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: indicatorColor,
+                fontWeight: FontWeight.w500,
+                fontSize: 11,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           if (showUpgradeButton && (hasReachedLimit || isNearLimit)) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             GestureDetector(
               onTap: () => _showUpgradeDialog(context),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
                   color: indicatorColor,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'UPGRADE',
+                  'UP',
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9,
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.onPrimary,
                   ),

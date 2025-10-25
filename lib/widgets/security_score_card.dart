@@ -6,6 +6,7 @@ class SecurityScoreCard extends StatelessWidget {
   final int totalAccounts;
   final int secureAccounts;
   final DateTime lastUpdated;
+  final bool isLoading;
 
   const SecurityScoreCard({
     super.key,
@@ -13,10 +14,135 @@ class SecurityScoreCard extends StatelessWidget {
     required this.totalAccounts,
     required this.secureAccounts,
     required this.lastUpdated,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Handle loading state
+    if (isLoading) {
+      return Card(
+        elevation: 4,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+          child: const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Calculating security score...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Handle empty password database
+    if (totalAccounts == 0) {
+      return Card(
+        elevation: 4,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.grey.withValues(alpha: 0.1),
+                Colors.grey.withValues(alpha: 0.05),
+              ],
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Security Score',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'No Data',
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Text(
+                          'Add passwords to see your security score',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.grey[300]!,
+                            width: 8,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          size: 32,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Column(
+                        children: [
+                          Text(
+                            '0/0',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Secure Accounts',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildLastUpdated(),
+            ],
+          ),
+        ),
+      );
+    }
+
     final scoreColor = _getScoreColor(score);
     final scoreDescription = SecurityScoringService.getScoreDescription(score);
 
@@ -29,7 +155,10 @@ class SecurityScoreCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [scoreColor.withOpacity(0.1), scoreColor.withOpacity(0.05)],
+            colors: [
+              scoreColor.withValues(alpha: 0.1),
+              scoreColor.withValues(alpha: 0.05),
+            ],
           ),
         ),
         child: Column(
