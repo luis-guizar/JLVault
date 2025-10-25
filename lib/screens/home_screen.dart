@@ -1,13 +1,28 @@
 import 'package:flutter/material.dart';
 import '../models/account.dart';
+import '../models/vault_metadata.dart';
 import '../data/db_helper.dart';
+import '../services/vault_manager.dart';
+import '../services/vault_encryption_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/account_title.dart';
+import '../widgets/vault_switcher.dart';
 import 'add_edit_screen.dart';
+import 'vault_management_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onLogout;
+  final VaultManager vaultManager;
+  final VaultEncryptionService encryptionService;
+  final ThemeService themeService;
 
-  const HomeScreen({super.key, this.onLogout});
+  const HomeScreen({
+    super.key,
+    this.onLogout,
+    required this.vaultManager,
+    required this.encryptionService,
+    required this.themeService,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -17,21 +32,62 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Account> _accounts = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  VaultMetadata? _currentVault;
 
   @override
   void initState() {
     super.initState();
-    _loadAccounts();
+    _loadCurrentVault();
+  }
+
+  Future<void> _loadCurrentVault() async {
+    try {
+      final vault = await widget.vaultManager.getActiveVault();
+      setState(() {
+        _currentVault = vault;
+      });
+      await _loadAccounts();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading vault: $e')));
+      }
+    }
   }
 
   Future<void> _loadAccounts() async {
-    setState(() => _isLoading = true);
-    final accounts = await DBHelper.getAll();
+    if (_currentVault == null) return;
+
     if (mounted) {
-      setState(() {
-        _accounts = accounts;
-        _isLoading = false;
-      });
+      setState(() => _isLoading = true);
+    }
+    try {
+      final encryptedAccounts = await DBHelper.getAllForVault(
+        _currentVault!.id,
+      );
+      final decryptedAccounts = await widget.encryptionService.decryptAccounts(
+        encryptedAccounts,
+      );
+
+      if (mounted) {
+        setState(() {
+          _accounts = decryptedAccounts;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading accounts: $e')));
+      }
     }
   }
 
@@ -58,7 +114,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (confirmed == true && account.id != null) {
       await DBHelper.delete(account.id!);
-      _loadAccounts();
+      if (mounted) {
+        _loadAccounts();
+      }
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -70,10 +128,51 @@ class _HomeScreenState extends State<HomeScreen> {
   void _navigateToAddEdit([Account? account]) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => AddEditScreen(account: account)),
+      MaterialPageRoute(
+        builder: (_) => AddEditScreen(
+          account: account,
+          vaultManager: widget.vaultManager,
+          encryptionService: widget.encryptionService,
+        ),
+      ),
     );
-    if (result == true) {
+    if (result == true && mounted) {
       _loadAccounts();
+    }
+  }
+
+  void _showVaultSwitcher() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => VaultSwitcher(
+        vaultManager: widget.vaultManager,
+        currentVault: _currentVault,
+        onVaultChanged: (vault) {
+          setState(() {
+            _currentVault = vault;
+          });
+          if (mounted) {
+            _loadAccounts();
+          }
+        },
+      ),
+    );
+  }
+
+  void _navigateToVaultManagement() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            VaultManagementScreen(vaultManager: widget.vaultManager),
+      ),
+    );
+    if (result != null) {
+      _loadCurrentVault();
     }
   }
 
@@ -91,31 +190,95 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('JL Vault'),
+        title: Row(
+          children: [
+            if (_currentVault != null) ...[
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _currentVault!.color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: _currentVault!.color.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  VaultIcons.getIcon(_currentVault!.iconName),
+                  color: _currentVault!.color,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _showVaultSwitcher,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _currentVault!.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_arrow_down, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ] else
+              const Expanded(child: Text('JL Vault')),
+          ],
+        ),
         elevation: 0,
         actions: [
+          // Vault management - still useful in app bar for quick access
+          IconButton(
+            icon: const Icon(Icons.folder_open),
+            onPressed: _navigateToVaultManagement,
+            tooltip: 'Gestionar bóvedas',
+          ),
+          // Lock app - important security action
           IconButton(
             icon: const Icon(Icons.lock_outline),
             onPressed: () {
               widget.onLogout?.call();
             },
-            tooltip: 'Lock App',
+            tooltip: 'Bloquear aplicación',
           ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'JL Vault',
-                applicationVersion: '1.0.0',
-                applicationIcon: const Icon(Icons.lock, size: 48),
-                children: [
-                  const Text(
-                    'A secure, offline password manager that stores your credentials locally with encryption.',
-                  ),
-                ],
-              );
+          // Overflow menu for less common actions
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'about':
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'Simple Vault',
+                    applicationVersion: '1.0.0',
+                    applicationIcon: const Icon(Icons.lock, size: 48),
+                    children: [
+                      const Text(
+                        'Un gestor de contraseñas seguro y offline que almacena tus credenciales localmente con cifrado.',
+                      ),
+                    ],
+                  );
+                  break;
+              }
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'about',
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline),
+                    SizedBox(width: 8),
+                    Text('Acerca de'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
         bottom: PreferredSize(

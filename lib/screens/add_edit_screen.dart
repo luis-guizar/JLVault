@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
 import '../models/account.dart';
+import '../models/totp_config.dart';
 import '../data/db_helper.dart';
 import '../services/encryption_service.dart';
 import '../services/password_generator_service.dart';
+import '../services/vault_manager.dart';
+import '../services/vault_encryption_service.dart';
 import '../widgets/password_generator_dialog.dart';
 import '../widgets/password_strength_indicator.dart';
+import '../screens/totp_setup_screen.dart';
+import '../widgets/totp_code_widget.dart';
 
 class AddEditScreen extends StatefulWidget {
   final Account? account;
+  final VaultManager vaultManager;
+  final VaultEncryptionService encryptionService;
 
-  const AddEditScreen({super.key, this.account});
+  const AddEditScreen({
+    super.key,
+    this.account,
+    required this.vaultManager,
+    required this.encryptionService,
+  });
 
   @override
   State<AddEditScreen> createState() => _AddEditScreenState();
@@ -23,16 +35,35 @@ class _AddEditScreenState extends State<AddEditScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   String _passwordStrength = 'Débil';
+  String? _currentVaultId;
+  TOTPConfig? _totpConfig;
 
   bool get _isEditing => widget.account != null;
 
   @override
   void initState() {
     super.initState();
+    _initializeVault();
     if (_isEditing) {
       _loadAccountData();
     }
     _passwordController.addListener(_updatePasswordStrength);
+  }
+
+  Future<void> _initializeVault() async {
+    try {
+      if (_isEditing) {
+        // Use the vault ID from the existing account
+        _currentVaultId = widget.account!.vaultId;
+      } else {
+        // Get the active vault for new accounts
+        final activeVault = await widget.vaultManager.getActiveVault();
+        _currentVaultId = activeVault?.id ?? 'default';
+      }
+    } catch (e) {
+      // Fallback to default vault
+      _currentVaultId = 'default';
+    }
   }
 
   void _updatePasswordStrength() {
@@ -47,33 +78,89 @@ class _AddEditScreenState extends State<AddEditScreen> {
   Future<void> _loadAccountData() async {
     final account = widget.account!;
     _nameController.text = account.name;
-    _usernameController.text = account.username;
-    // Decrypt password for editing
-    final decrypted = await EncryptionService.decryptText(account.password);
-    _passwordController.text = decrypted;
+
+    try {
+      // Decrypt using vault-specific encryption
+      final decryptedAccount = await widget.encryptionService.decryptAccount(
+        account,
+      );
+      _usernameController.text = decryptedAccount.username;
+      _passwordController.text = decryptedAccount.password;
+      _totpConfig = decryptedAccount.totpConfig;
+    } catch (e) {
+      // Fallback to legacy encryption for backward compatibility
+      try {
+        final decryptedPassword = await EncryptionService.decryptText(
+          account.password,
+        );
+        final decryptedUsername = await EncryptionService.decryptText(
+          account.username,
+        );
+        _usernameController.text = decryptedUsername;
+        _passwordController.text = decryptedPassword;
+      } catch (legacyError) {
+        // If both fail, show the encrypted data (shouldn't happen in normal use)
+        _usernameController.text = account.username;
+        _passwordController.text = account.password;
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Warning: Could not decrypt account data'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _saveAccount() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_currentVaultId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Error: No vault selected')));
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
-      final encrypted = await EncryptionService.encryptText(
-        _passwordController.text,
-      );
+      // Create account with plain text data
       final account = Account(
         id: widget.account?.id,
         name: _nameController.text.trim(),
         username: _usernameController.text.trim(),
-        password: encrypted,
+        password: _passwordController.text,
+        vaultId: _currentVaultId!,
+        createdAt: widget.account?.createdAt,
+        modifiedAt: DateTime.now(),
+        totpConfig: _totpConfig,
+      );
+
+      // Encrypt the account data using vault-specific encryption
+      final encryptedAccount = await widget.encryptionService.encryptAccount(
+        account,
       );
 
       if (_isEditing) {
-        await DBHelper.update(account);
+        await DBHelper.update(encryptedAccount);
       } else {
-        await DBHelper.insert(account);
+        await DBHelper.insert(encryptedAccount);
       }
+
+      // Update vault statistics
+      if (!_isEditing) {
+        final currentCount = await DBHelper.getAccountCountForVault(
+          _currentVaultId!,
+        );
+        await widget.vaultManager.updateVaultStatistics(
+          _currentVaultId!,
+          passwordCount: currentCount,
+        );
+      }
+
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -174,6 +261,155 @@ class _AddEditScreenState extends State<AddEditScreen> {
     }
   }
 
+  Widget _buildTOTPSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.security),
+                const SizedBox(width: 8),
+                const Text(
+                  'TOTP Authenticator',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                if (_totpConfig != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      'Configured',
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add two-factor authentication for extra security',
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            if (_totpConfig != null) ...[
+              CompactTOTPCodeWidget(config: _totpConfig!),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _editTOTP,
+                      icon: const Icon(Icons.edit),
+                      label: const Text('Edit TOTP'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _removeTOTP,
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      label: const Text(
+                        'Remove',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _setupTOTP,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Setup TOTP'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _setupTOTP() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TOTPSetupScreen(
+          onTOTPConfigured: (config) {
+            setState(() {
+              _totpConfig = config;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  void _editTOTP() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TOTPSetupScreen(
+          existingConfig: _totpConfig,
+          onTOTPConfigured: (config) {
+            setState(() {
+              _totpConfig = config;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  void _removeTOTP() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove TOTP'),
+        content: const Text(
+          'Are you sure you want to remove TOTP authentication from this account?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              setState(() {
+                _totpConfig = null;
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -181,26 +417,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
     _passwordController.dispose();
     _passwordController.removeListener(_updatePasswordStrength);
     super.dispose();
-  }
-
-  Map<String, dynamic> _getStrengthStatus() {
-    switch (_passwordStrength) {
-      case 'Fuerte':
-        return {'color': Colors.green, 'value': 1.0};
-      case 'Moderada':
-        return {'color': Colors.orange, 'value': 0.66};
-      case 'Débil':
-      default:
-        // We check if the password field is completely empty to show 'No password' state
-        if (_passwordController.text.isEmpty) {
-          return {
-            'color': Colors.grey,
-            'value': 0.0,
-            'text': 'Ingresa una contraseña',
-          };
-        }
-        return {'color': Colors.red, 'value': 0.33};
-    }
   }
 
   @override
@@ -316,6 +532,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
                         ],
                       ],
                     ),
+                    const SizedBox(height: 20),
+                    _buildTOTPSection(),
                     const SizedBox(height: 30),
                     ElevatedButton.icon(
                       onPressed: _saveAccount,
