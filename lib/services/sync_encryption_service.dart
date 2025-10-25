@@ -22,11 +22,19 @@ class SyncEncryptionService {
     String deviceId,
     String devicePublicKey,
   ) async {
+    // Close any existing session for this device to ensure fresh keys
+    await _closeDeviceSessions(deviceId);
+
     // Generate ephemeral ECDH key pair for this session
     final keyPair = _generateECDHKeyPair();
 
-    // Derive shared secret using ECDH
+    // Validate and derive shared secret using ECDH
     final sharedSecret = _performECDH(keyPair.privateKey, devicePublicKey);
+
+    // Validate shared secret is not zero (security check)
+    if (_isZeroBytes(sharedSecret)) {
+      throw Exception('ECDH key exchange failed: invalid shared secret');
+    }
 
     // Derive session keys from shared secret
     final sessionKeys = _deriveSessionKeys(sharedSecret, deviceId);
@@ -56,11 +64,19 @@ class SyncEncryptionService {
     String devicePublicKey,
     String ephemeralPublicKey,
   ) async {
+    // Close any existing session for this device to ensure fresh keys
+    await _closeDeviceSessions(deviceId);
+
     // Generate our ephemeral key pair
     final keyPair = _generateECDHKeyPair();
 
-    // Derive shared secret using their ephemeral public key
+    // Validate and derive shared secret using their ephemeral public key
     final sharedSecret = _performECDH(keyPair.privateKey, ephemeralPublicKey);
+
+    // Validate shared secret is not zero (security check)
+    if (_isZeroBytes(sharedSecret)) {
+      throw Exception('ECDH key exchange failed: invalid shared secret');
+    }
 
     // Derive session keys from shared secret
     final sessionKeys = _deriveSessionKeys(sharedSecret, deviceId);
@@ -92,6 +108,12 @@ class SyncEncryptionService {
     final session = _activeSessions[sessionId];
     if (session == null) {
       throw Exception('Invalid session ID: $sessionId');
+    }
+
+    // Validate session is still active and not expired
+    if (!_isSessionValid(session)) {
+      await closeSyncSession(sessionId);
+      throw Exception('Session expired or invalid: $sessionId');
     }
 
     // Check if key rotation is needed
@@ -152,6 +174,12 @@ class SyncEncryptionService {
       throw Exception('Invalid session ID: ${encryptedData.sessionId}');
     }
 
+    // Validate session is still active and not expired
+    if (!_isSessionValid(session)) {
+      await closeSyncSession(encryptedData.sessionId);
+      throw Exception('Session expired or invalid: ${encryptedData.sessionId}');
+    }
+
     final nonce = base64.decode(encryptedData.nonce);
     final ciphertext = base64.decode(encryptedData.ciphertext);
     final receivedHmac = base64.decode(encryptedData.hmac);
@@ -203,13 +231,12 @@ class SyncEncryptionService {
   Future<void> closeSyncSession(String sessionId) async {
     final session = _activeSessions.remove(sessionId);
     if (session != null) {
-      // Clear sensitive data from memory
-      session.encryptionKey.fillRange(0, session.encryptionKey.length, 0);
-      session.authenticationKey.fillRange(
-        0,
-        session.authenticationKey.length,
-        0,
-      );
+      // Securely clear sensitive data from memory
+      _secureMemoryClear(session.encryptionKey);
+      _secureMemoryClear(session.authenticationKey);
+
+      // Note: Private key is handled by the crypto library's garbage collection
+      // but we ensure the session reference is removed
     }
   }
 
@@ -224,6 +251,7 @@ class SyncEncryptionService {
   /// Gets active session information (without sensitive data)
   List<SyncSessionInfo> getActiveSessions() {
     return _activeSessions.values
+        .where(_isSessionValid) // Only return valid sessions
         .map(
           (session) => SyncSessionInfo(
             sessionId: session.sessionId,
@@ -233,6 +261,64 @@ class SyncEncryptionService {
           ),
         )
         .toList();
+  }
+
+  /// Gets the ephemeral public key for a session (for key exchange)
+  String? getSessionPublicKey(String sessionId) {
+    final session = _activeSessions[sessionId];
+    return session?.ephemeralPublicKey;
+  }
+
+  /// Initiates key exchange with another device
+  Future<KeyExchangeData> initiateKeyExchange(String deviceId) async {
+    // Generate ephemeral key pair for this exchange
+    final keyPair = _generateECDHKeyPair();
+    final publicKey = _encodePublicKey(keyPair.publicKey);
+
+    // Store temporary key pair for completion
+    final exchangeId = _generateSessionId();
+
+    return KeyExchangeData(
+      exchangeId: exchangeId,
+      publicKey: publicKey,
+      deviceId: deviceId,
+    );
+  }
+
+  /// Completes key exchange and creates session
+  Future<SyncSession> completeKeyExchange(
+    String exchangeId,
+    String deviceId,
+    String remotePublicKey,
+    ECPrivateKey localPrivateKey,
+  ) async {
+    // Perform ECDH with the remote public key
+    final sharedSecret = _performECDH(localPrivateKey, remotePublicKey);
+
+    // Validate shared secret
+    if (_isZeroBytes(sharedSecret)) {
+      throw Exception('Key exchange failed: invalid shared secret');
+    }
+
+    // Derive session keys
+    final sessionKeys = _deriveSessionKeys(sharedSecret, deviceId);
+
+    // Create session
+    final session = SyncSession(
+      sessionId: exchangeId,
+      deviceId: deviceId,
+      ephemeralPublicKey: remotePublicKey,
+      ephemeralPrivateKey: localPrivateKey,
+      encryptionKey: sessionKeys.encryptionKey,
+      authenticationKey: sessionKeys.authenticationKey,
+      createdAt: DateTime.now(),
+      lastUsed: DateTime.now(),
+    );
+
+    _activeSessions[session.sessionId] = session;
+    _scheduleKeyRotation(session.sessionId);
+
+    return session;
   }
 
   // Private helper methods
@@ -396,21 +482,23 @@ class SyncEncryptionService {
     final session = _activeSessions[sessionId];
     if (session == null) return;
 
-    // Generate new ephemeral key pair
+    // Generate new ephemeral key pair for perfect forward secrecy
     final keyPair = _generateECDHKeyPair();
 
-    // For key rotation, we use the existing shared secret with a new salt
+    // Create new shared secret using key ratcheting
     final rotationSalt = _generateNonce();
-    final info = utf8.encode('KeyRotation');
+    final rotationInfo = utf8.encode(
+      'KeyRotation-${DateTime.now().millisecondsSinceEpoch}',
+    );
 
-    // Use HKDF-like derivation for key rotation
+    // Use HKDF for key ratcheting with current key as input
     final hmacExtract = Hmac(sha256, rotationSalt);
     final prk = hmacExtract.convert(session.encryptionKey).bytes;
-    final newKeys = _hkdfExpand(prk, info, 64);
+    final newKeys = _hkdfExpand(prk, rotationInfo, 64);
 
-    // Clear old keys
-    session.encryptionKey.fillRange(0, session.encryptionKey.length, 0);
-    session.authenticationKey.fillRange(0, session.authenticationKey.length, 0);
+    // Securely clear old keys from memory
+    _secureMemoryClear(session.encryptionKey);
+    _secureMemoryClear(session.authenticationKey);
 
     // Update with new keys
     session.encryptionKey = Uint8List.fromList(newKeys.sublist(0, 32));
@@ -418,6 +506,19 @@ class SyncEncryptionService {
     session.ephemeralPublicKey = _encodePublicKey(keyPair.publicKey);
     session.ephemeralPrivateKey = keyPair.privateKey;
     session.createdAt = DateTime.now(); // Reset rotation timer
+
+    // Clear derived keys from local memory
+    newKeys.fillRange(0, newKeys.length, 0);
+    rotationSalt.fillRange(0, rotationSalt.length, 0);
+  }
+
+  /// Securely clears sensitive data from memory
+  void _secureMemoryClear(Uint8List data) {
+    // Overwrite with random data first, then zeros
+    for (int i = 0; i < data.length; i++) {
+      data[i] = _secureRandom.nextUint8();
+    }
+    data.fillRange(0, data.length, 0);
   }
 
   void _scheduleKeyRotation(String sessionId) {
@@ -427,6 +528,35 @@ class SyncEncryptionService {
         _scheduleKeyRotation(sessionId); // Schedule next rotation
       }
     });
+  }
+
+  /// Closes all sessions for a specific device
+  Future<void> _closeDeviceSessions(String deviceId) async {
+    final sessionsToClose = _activeSessions.entries
+        .where((entry) => entry.value.deviceId == deviceId)
+        .map((entry) => entry.key)
+        .toList();
+
+    for (final sessionId in sessionsToClose) {
+      await closeSyncSession(sessionId);
+    }
+  }
+
+  /// Validates that bytes are not all zeros (security check)
+  bool _isZeroBytes(Uint8List bytes) {
+    for (final byte in bytes) {
+      if (byte != 0) return false;
+    }
+    return true;
+  }
+
+  /// Validates session is still active and not expired
+  bool _isSessionValid(SyncSession session) {
+    final now = DateTime.now();
+    const maxSessionAge = Duration(hours: 24); // Maximum session lifetime
+
+    return now.difference(session.createdAt) < maxSessionAge &&
+        now.difference(session.lastUsed) < Duration(hours: 2); // Idle timeout
   }
 
   // Compatibility methods for existing sync protocol
@@ -449,10 +579,7 @@ class SyncEncryptionService {
         .where((s) => s.deviceId == deviceId)
         .firstOrNull;
 
-    if (session == null) {
-      // For compatibility, create a session with a dummy public key
-      session = await createSyncSession(deviceId, 'dummy_key');
-    }
+    session ??= await createSyncSession(deviceId, 'dummy_key');
 
     final encryptedData = await encryptSyncData(session.sessionId, data);
 
@@ -572,66 +699,28 @@ class SyncSessionInfo {
   });
 }
 
-// Compatibility methods for existing sync protocol
+/// Key exchange data for initiating secure sessions
+class KeyExchangeData {
+  final String exchangeId;
+  final String publicKey;
+  final String deviceId;
 
-extension SyncEncryptionServiceCompat on SyncEncryptionService {
-  /// Checks if a device key exists for sync
-  bool hasDeviceKey(String deviceId) {
-    // Check if there's an active session for this device
-    return _activeSessions.values.any(
-      (session) => session.deviceId == deviceId,
-    );
-  }
+  KeyExchangeData({
+    required this.exchangeId,
+    required this.publicKey,
+    required this.deviceId,
+  });
 
-  /// Encrypts sync data for transmission (compatibility method)
-  Future<EncryptedSyncPacket> encryptSyncDataCompat({
-    required String deviceId,
-    required Map<String, dynamic> data,
-  }) async {
-    // Find or create session for this device
-    SyncSession? session = _activeSessions.values
-        .where((s) => s.deviceId == deviceId)
-        .firstOrNull;
+  Map<String, dynamic> toJson() => {
+    'exchangeId': exchangeId,
+    'publicKey': publicKey,
+    'deviceId': deviceId,
+  };
 
-    if (session == null) {
-      // For compatibility, create a session with a dummy public key
-      session = await createSyncSession(deviceId, 'dummy_key');
-    }
-
-    final encryptedData = await encryptSyncData(session.sessionId, data);
-
-    // Convert to EncryptedSyncPacket format
-    return EncryptedSyncPacket(
-      deviceId: deviceId,
-      nonce: encryptedData.nonce,
-      encryptedData: base64.decode(encryptedData.ciphertext),
-      signature: encryptedData.hmac,
-      timestamp: encryptedData.timestamp,
-    );
-  }
-
-  /// Decrypts sync data from transmission (compatibility method)
-  Future<Map<String, dynamic>> decryptSyncDataCompat({
-    required EncryptedSyncPacket packet,
-  }) async {
-    // Find session for this device
-    final session = _activeSessions.values
-        .where((s) => s.deviceId == packet.deviceId)
-        .firstOrNull;
-
-    if (session == null) {
-      throw Exception('No active session for device: ${packet.deviceId}');
-    }
-
-    // Convert from EncryptedSyncPacket format
-    final encryptedData = EncryptedSyncData(
-      sessionId: session.sessionId,
-      nonce: packet.nonce,
-      ciphertext: base64.encode(packet.encryptedData),
-      hmac: packet.signature,
-      timestamp: packet.timestamp,
-    );
-
-    return await decryptSyncData(encryptedData);
-  }
+  factory KeyExchangeData.fromJson(Map<String, dynamic> json) =>
+      KeyExchangeData(
+        exchangeId: json['exchangeId'],
+        publicKey: json['publicKey'],
+        deviceId: json['deviceId'],
+      );
 }

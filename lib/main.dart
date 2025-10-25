@@ -11,6 +11,7 @@ import 'services/animation_service.dart';
 import 'services/app_initialization_service.dart';
 import 'services/splash_screen_service.dart';
 import 'services/lazy_loading_service.dart';
+import 'services/enhanced_auth_service.dart';
 
 void main() async {
   final stopwatch = Stopwatch()..start();
@@ -18,6 +19,9 @@ void main() async {
   try {
     // Initialize only critical services for fast startup
     await AppInitializationService.instance.initializeCriticalServices();
+
+    // Initialize enhanced authentication service
+    await EnhancedAuthService.initialize();
 
     // Start background initialization (non-blocking)
     AppInitializationService.instance.initializeBackgroundServices();
@@ -135,6 +139,7 @@ class _PasswordManagerAppState extends State<PasswordManagerApp>
     try {
       TimeSyncService.stopMonitoring();
       AppInitializationService.instance.dispose();
+      EnhancedAuthService.dispose();
     } catch (e) {
       if (kDebugMode) {
         print('Error disposing services: $e');
@@ -148,8 +153,9 @@ class _PasswordManagerAppState extends State<PasswordManagerApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.paused:
-        // App is going to background - record the time
+        // App is going to background - record the time and clear sensitive data
         _lastBackgroundTime = DateTime.now();
+        EnhancedAuthService.onAppPaused();
         break;
       case AppLifecycleState.resumed:
         if (_isAuthenticated && _lastBackgroundTime != null) {
@@ -171,6 +177,8 @@ class _PasswordManagerAppState extends State<PasswordManagerApp>
       case AppLifecycleState.detached:
         break;
       case AppLifecycleState.hidden:
+        // App is hidden - clear sensitive data
+        EnhancedAuthService.onAppBackgrounded();
         break;
     }
   }

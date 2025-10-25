@@ -4,6 +4,7 @@ import '../models/vault_metadata.dart';
 import '../data/db_helper.dart';
 import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
+import '../services/crypto_isolate_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/account_title.dart';
 import '../widgets/vault_switcher.dart';
@@ -69,9 +70,20 @@ class _HomeScreenState extends State<HomeScreen> {
       final encryptedAccounts = await DBHelper.getAllForVault(
         _currentVault!.id,
       );
-      final decryptedAccounts = await VaultEncryptionService.decryptAccounts(
-        encryptedAccounts,
-      );
+
+      // Get master password from encryption service
+      final masterPassword = VaultEncryptionService.currentMasterPassword;
+      if (masterPassword == null) {
+        throw Exception('Master password not available');
+      }
+
+      // Decrypt accounts in isolates for better performance
+      final decryptedAccounts =
+          await CryptoIsolateService.decryptAccountsInIsolates(
+            encryptedAccounts,
+            _currentVault!.id,
+            masterPassword,
+          );
 
       if (mounted) {
         setState(() {

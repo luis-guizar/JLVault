@@ -6,6 +6,7 @@ import '../services/encryption_service.dart';
 import '../services/password_generator_service.dart';
 import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
+import '../services/crypto_isolate_service.dart';
 import '../widgets/password_generator_dialog.dart';
 import '../widgets/password_strength_indicator.dart';
 import '../screens/totp_setup_screen.dart';
@@ -80,13 +81,28 @@ class _AddEditScreenState extends State<AddEditScreen> {
     _nameController.text = account.name;
 
     try {
-      // Decrypt using vault-specific encryption
-      final decryptedAccount = await VaultEncryptionService.decryptAccount(
-        account,
-      );
-      _usernameController.text = decryptedAccount.username;
-      _passwordController.text = decryptedAccount.password;
-      _totpConfig = decryptedAccount.totpConfig;
+      // Get master password for isolate operation
+      final masterPassword = VaultEncryptionService.currentMasterPassword;
+      if (masterPassword != null) {
+        // Decrypt using isolate for better performance
+        final decryptedAccount =
+            await CryptoIsolateService.decryptAccountInIsolate(
+              account,
+              account.vaultId,
+              masterPassword,
+            );
+        _usernameController.text = decryptedAccount.username;
+        _passwordController.text = decryptedAccount.password;
+        _totpConfig = decryptedAccount.totpConfig;
+      } else {
+        // Fallback to direct decryption
+        final decryptedAccount = await VaultEncryptionService.decryptAccount(
+          account,
+        );
+        _usernameController.text = decryptedAccount.username;
+        _passwordController.text = decryptedAccount.password;
+        _totpConfig = decryptedAccount.totpConfig;
+      }
     } catch (e) {
       // Fallback to legacy encryption for backward compatibility
       try {
@@ -139,10 +155,17 @@ class _AddEditScreenState extends State<AddEditScreen> {
         totpConfig: _totpConfig,
       );
 
-      // Encrypt the account data using vault-specific encryption
-      final encryptedAccount = await VaultEncryptionService.encryptAccount(
-        account,
-      );
+      // Get master password for isolate operation
+      final masterPassword = VaultEncryptionService.currentMasterPassword;
+
+      // Encrypt the account data using isolate for better performance
+      final encryptedAccount = masterPassword != null
+          ? await CryptoIsolateService.encryptAccountInIsolate(
+              account,
+              _currentVaultId!,
+              masterPassword,
+            )
+          : await VaultEncryptionService.encryptAccount(account);
 
       if (_isEditing) {
         await DBHelper.update(encryptedAccount);

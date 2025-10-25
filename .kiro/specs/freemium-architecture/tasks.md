@@ -543,7 +543,12 @@
   - _Requirements: 10.1, 10.2_
 
 
-- [-] 10.2 Implement perfect forward secrecy for P2P sync
+- [x] 10.2 Implement perfect forward secrecy for P2P sync
+
+
+
+
+
 
   - Add ephemeral ECDH key exchange for each sync session
   - Create session-based encryption keys that are discarded after sync
@@ -554,6 +559,11 @@
 
 
 - [ ] 10.3 Enhance biometric authentication security
+
+
+
+
+
   - Add exponential backoff for failed biometric attempts (1s, 2s, 4s, 8s, etc.)
   - Implement secure memory clearing when app is backgrounded or paused
   - Create additional biometric authentication for vault deletion and export

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
 import '../services/vault_manager.dart';
-import '../services/auth_service.dart';
+import '../services/enhanced_auth_service.dart';
 
 /// Dialog for confirming vault deletion with security measures
 class VaultDeletionDialog extends StatefulWidget {
@@ -46,20 +46,25 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
 
   Future<void> _authenticate() async {
     try {
-      final authenticated = await AuthService.authenticate(
-        reason: 'Authenticate to delete "${widget.vault.name}" vault',
-      );
+      final result =
+          await EnhancedAuthService.authenticateForSensitiveOperation(
+            operation: 'vault_deletion',
+            customReason: 'Authenticate to delete "${widget.vault.name}" vault',
+          );
 
       setState(() {
-        _hasAuthenticated = authenticated;
+        _hasAuthenticated = result.isSuccess;
       });
 
-      if (!authenticated && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Authentication required to delete vault'),
-          ),
-        );
+      if (!result.isSuccess && mounted) {
+        String message = 'Authentication required to delete vault';
+        if (result.errorMessage != null) {
+          message = result.errorMessage!;
+        }
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (e) {
       if (mounted) {
@@ -120,10 +125,10 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: widget.vault.color.withOpacity(0.1),
+                color: widget.vault.color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: widget.vault.color.withOpacity(0.3),
+                  color: widget.vault.color.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),
@@ -166,10 +171,10 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: Colors.red.withOpacity(0.3),
+                  color: Colors.red.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),
@@ -227,10 +232,10 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Colors.orange.withOpacity(0.3),
+                    color: Colors.orange.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),
@@ -251,10 +256,10 @@ class _VaultDeletionDialogState extends State<VaultDeletionDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Colors.green.withOpacity(0.3),
+                    color: Colors.green.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),

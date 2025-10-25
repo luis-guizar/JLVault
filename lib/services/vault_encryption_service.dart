@@ -335,6 +335,9 @@ class VaultEncryptionService {
   static String? _currentMasterPassword;
   static String _currentVaultId = 'default';
 
+  /// Gets the current master password (for isolate operations)
+  static String? get currentMasterPassword => _currentMasterPassword;
+
   /// Sets the master password for the current session
   static void setMasterPassword(String password) {
     _currentMasterPassword = password;

@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../models/export_result.dart';
 import '../../models/vault_metadata.dart';
 import '../../services/export/export_service.dart';
+import '../../services/enhanced_auth_service.dart';
 
 /// Dialog for configuring and initiating export operations
 class ExportDialog extends StatefulWidget {
@@ -34,6 +35,7 @@ class _ExportDialogState extends State<ExportDialog> {
   bool _includeMetadata = false;
   bool _compressOutput = false;
   bool _isExporting = false;
+  bool _hasAuthenticated = false;
 
   @override
   void initState() {
@@ -71,6 +73,8 @@ class _ExportDialogState extends State<ExportDialog> {
                   const SizedBox(height: 16),
                   _buildPasswordFields(),
                 ],
+                const SizedBox(height: 16),
+                _buildAuthenticationSection(),
               ],
             ),
           ),
@@ -81,16 +85,22 @@ class _ExportDialogState extends State<ExportDialog> {
           onPressed: _isExporting ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
-          onPressed: _isExporting ? null : _handleExport,
-          child: _isExporting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Export'),
-        ),
+        if (!_hasAuthenticated)
+          ElevatedButton(
+            onPressed: _selectedVaultIds.isNotEmpty ? _authenticate : null,
+            child: const Text('Authenticate'),
+          )
+        else
+          ElevatedButton(
+            onPressed: _isExporting ? null : _handleExport,
+            child: _isExporting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Export'),
+          ),
       ],
     );
   }
@@ -298,6 +308,37 @@ class _ExportDialogState extends State<ExportDialog> {
     }
   }
 
+  Future<void> _authenticate() async {
+    try {
+      final result =
+          await EnhancedAuthService.authenticateForSensitiveOperation(
+            operation: 'data_export',
+            customReason: 'Authenticate to export password data',
+          );
+
+      setState(() {
+        _hasAuthenticated = result.isSuccess;
+      });
+
+      if (!result.isSuccess && mounted) {
+        String message = 'Authentication required to export data';
+        if (result.errorMessage != null) {
+          message = result.errorMessage!;
+        }
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Authentication failed: $e')));
+      }
+    }
+  }
+
   Future<void> _handleExport() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -308,6 +349,12 @@ class _ExportDialogState extends State<ExportDialog> {
         const SnackBar(content: Text('Please select at least one vault')),
       );
       return;
+    }
+
+    // Require authentication for sensitive export operations
+    if (!_hasAuthenticated) {
+      await _authenticate();
+      if (!_hasAuthenticated) return;
     }
 
     // Pick export location
@@ -359,6 +406,64 @@ class _ExportDialogState extends State<ExportDialog> {
         });
       }
     }
+  }
+
+  Widget _buildAuthenticationSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Security', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        if (!_hasAuthenticated)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.orange.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.security, color: Colors.orange, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Biometric authentication required for data export',
+                    style: TextStyle(color: Colors.orange, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.green.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Authentication successful',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 
   String _generateFileName() {
