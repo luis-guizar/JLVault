@@ -6,6 +6,7 @@ import 'screens/main_navigation_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/vault_manager.dart';
 import 'services/vault_encryption_service.dart';
+import 'services/platform_crypto_service.dart';
 import 'services/time_sync_service.dart';
 import 'services/animation_service.dart';
 import 'services/app_initialization_service.dart';
@@ -22,6 +23,19 @@ void main() async {
 
     // Initialize enhanced authentication service
     await EnhancedAuthService.initialize();
+
+    // Initialize platform crypto service
+    try {
+      await PlatformCryptoService.initialize();
+      if (kDebugMode) {
+        print('Platform crypto service initialized successfully');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Platform crypto service initialization failed: $e');
+        print('Will fallback to Dart-based crypto');
+      }
+    }
 
     // Start background initialization (non-blocking)
     AppInitializationService.instance.initializeBackgroundServices();

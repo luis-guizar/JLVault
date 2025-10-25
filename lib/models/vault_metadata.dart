@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
-/// Represents metadata for a vault including display information and statistics
+/// Metadata for a password vault
 class VaultMetadata {
   final String id;
   final String name;
@@ -10,7 +11,6 @@ class VaultMetadata {
   final DateTime lastAccessedAt;
   final int passwordCount;
   final double securityScore;
-  final bool isDefault;
 
   const VaultMetadata({
     required this.id,
@@ -19,29 +19,26 @@ class VaultMetadata {
     required this.color,
     required this.createdAt,
     required this.lastAccessedAt,
-    required this.passwordCount,
-    required this.securityScore,
-    this.isDefault = false,
+    this.passwordCount = 0,
+    this.securityScore = 0.0,
   });
 
-  /// Creates a new vault metadata instance
+  /// Creates a new vault with generated ID and current timestamps
   factory VaultMetadata.create({
     required String name,
     required String iconName,
     required Color color,
-    bool isDefault = false,
   }) {
     final now = DateTime.now();
     return VaultMetadata(
-      id: _generateId(),
+      id: const Uuid().v4(),
       name: name,
       iconName: iconName,
       color: color,
       createdAt: now,
       lastAccessedAt: now,
       passwordCount: 0,
-      securityScore: 100.0,
-      isDefault: isDefault,
+      securityScore: 0.0,
     );
   }
 
@@ -55,7 +52,6 @@ class VaultMetadata {
     DateTime? lastAccessedAt,
     int? passwordCount,
     double? securityScore,
-    bool? isDefault,
   }) {
     return VaultMetadata(
       id: id ?? this.id,
@@ -66,46 +62,43 @@ class VaultMetadata {
       lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
       passwordCount: passwordCount ?? this.passwordCount,
       securityScore: securityScore ?? this.securityScore,
-      isDefault: isDefault ?? this.isDefault,
     );
   }
 
-  /// Converts to map for database storage
-  Map<String, dynamic> toMap() {
+  /// Converts to JSON map
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
-      'icon_name': iconName,
+      'iconName': iconName,
       'color': color.value,
-      'created_at': createdAt.millisecondsSinceEpoch,
-      'last_accessed_at': lastAccessedAt.millisecondsSinceEpoch,
-      'password_count': passwordCount,
-      'security_score': securityScore,
-      'is_default': isDefault ? 1 : 0,
+      'createdAt': createdAt.toIso8601String(),
+      'lastAccessedAt': lastAccessedAt.toIso8601String(),
+      'passwordCount': passwordCount,
+      'securityScore': securityScore,
     };
   }
 
-  /// Creates from database map
-  factory VaultMetadata.fromMap(Map<String, dynamic> map) {
+  /// Creates from JSON map
+  factory VaultMetadata.fromJson(Map<String, dynamic> json) {
     return VaultMetadata(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      iconName: map['icon_name'] as String,
-      color: Color(map['color'] as int),
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
-      lastAccessedAt: DateTime.fromMillisecondsSinceEpoch(
-        map['last_accessed_at'] as int,
-      ),
-      passwordCount: map['password_count'] as int,
-      securityScore: (map['security_score'] as num).toDouble(),
-      isDefault: (map['is_default'] as int) == 1,
+      id: json['id'] as String,
+      name: json['name'] as String,
+      iconName: json['iconName'] as String,
+      color: Color(json['color'] as int),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      lastAccessedAt: DateTime.parse(json['lastAccessedAt'] as String),
+      passwordCount: json['passwordCount'] as int? ?? 0,
+      securityScore: (json['securityScore'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
-  /// Generates a unique ID for the vault
-  static String _generateId() {
-    return 'vault_${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}';
-  }
+  /// Converts to Map (alias for toJson for compatibility)
+  Map<String, dynamic> toMap() => toJson();
+
+  /// Creates from Map (alias for fromJson for compatibility)
+  factory VaultMetadata.fromMap(Map<String, dynamic> map) =>
+      VaultMetadata.fromJson(map);
 
   @override
   bool operator ==(Object other) {
@@ -118,74 +111,6 @@ class VaultMetadata {
 
   @override
   String toString() {
-    return 'VaultMetadata(id: $id, name: $name, passwordCount: $passwordCount, securityScore: $securityScore)';
+    return 'VaultMetadata(id: $id, name: $name, passwordCount: $passwordCount)';
   }
-}
-
-/// Available vault icons
-class VaultIcons {
-  static const List<String> available = [
-    'lock',
-    'work',
-    'home',
-    'family',
-    'travel',
-    'shopping',
-    'gaming',
-    'social',
-    'finance',
-    'health',
-    'education',
-    'business',
-  ];
-
-  /// Gets the Flutter icon for a given icon name
-  static IconData getIcon(String iconName) {
-    switch (iconName) {
-      case 'lock':
-        return Icons.lock;
-      case 'work':
-        return Icons.work;
-      case 'home':
-        return Icons.home;
-      case 'family':
-        return Icons.family_restroom;
-      case 'travel':
-        return Icons.flight;
-      case 'shopping':
-        return Icons.shopping_cart;
-      case 'gaming':
-        return Icons.games;
-      case 'social':
-        return Icons.people;
-      case 'finance':
-        return Icons.account_balance;
-      case 'health':
-        return Icons.local_hospital;
-      case 'education':
-        return Icons.school;
-      case 'business':
-        return Icons.business;
-      default:
-        return Icons.lock;
-    }
-  }
-}
-
-/// Predefined vault colors
-class VaultColors {
-  static const List<Color> available = [
-    Colors.blue,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.red,
-    Colors.teal,
-    Colors.indigo,
-    Colors.pink,
-    Colors.amber,
-    Colors.cyan,
-    Colors.lime,
-    Colors.deepOrange,
-  ];
 }

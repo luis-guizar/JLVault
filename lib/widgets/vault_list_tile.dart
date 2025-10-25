@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
+import '../utils/vault_icons.dart';
 
 /// A list tile widget for displaying vault information
 class VaultListTile extends StatelessWidget {

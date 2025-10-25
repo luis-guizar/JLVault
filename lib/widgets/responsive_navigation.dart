@@ -70,6 +70,11 @@ class AppNavigationDestinations {
       label: 'Seguridad',
     ),
     NavigationDestination(
+      icon: Icon(Icons.import_export_outlined),
+      selectedIcon: Icon(Icons.import_export),
+      label: 'Datos',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.sync_outlined),
       selectedIcon: Icon(Icons.sync),
       label: 'Sync',

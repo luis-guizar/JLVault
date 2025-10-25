@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import '../models/account.dart';
 import '../models/totp_config.dart';
+import '../models/premium_feature.dart';
 
 import '../widgets/totp_code_widget.dart';
 import '../widgets/time_sync_warning_widget.dart';
+import '../widgets/feature_gate_wrapper.dart';
 import '../screens/totp_setup_screen.dart';
 import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
+import '../services/platform_crypto_service.dart';
+import '../services/crypto_isolate_service.dart';
+import '../services/feature_gate_factory.dart';
+import '../services/license_manager_factory.dart';
 import '../data/db_helper.dart';
 import '../services/time_sync_service.dart';
 
@@ -32,6 +38,9 @@ class TOTPManagementScreen extends StatefulWidget {
 class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
   List<Account> _allAccounts = [];
   bool _isLoading = true;
+  late final _featureGate = FeatureGateFactory.create(
+    LicenseManagerFactory.getInstance(),
+  );
 
   @override
   void initState() {
@@ -75,9 +84,32 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
       if (vault == null) return [];
 
       final encryptedAccounts = await DBHelper.getAllForVault(vault.id);
-      final decryptedAccounts = await VaultEncryptionService.decryptAccounts(
-        encryptedAccounts,
-      );
+
+      // Get master password from encryption service
+      final masterPassword = VaultEncryptionService.currentMasterPassword;
+      if (masterPassword == null) {
+        throw Exception('Master password not available');
+      }
+
+      List<Account> decryptedAccounts;
+
+      // Try platform crypto first, fallback to isolate service
+      if (await PlatformCryptoService.isAvailable()) {
+        decryptedAccounts = await PlatformCryptoService.decryptAccounts(
+          encryptedAccounts,
+          vault.id,
+          masterPassword,
+        );
+      } else {
+        // Fallback to isolate service
+        decryptedAccounts =
+            await CryptoIsolateService.decryptAccountsInIsolates(
+              encryptedAccounts,
+              vault.id,
+              masterPassword,
+            );
+      }
+
       return decryptedAccounts;
     } catch (e) {
       return [];
@@ -103,11 +135,20 @@ class _TOTPManagementScreenState extends State<TOTPManagementScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addTOTPToAccount,
-        tooltip: 'Add TOTP to account',
-        child: const Icon(Icons.add),
+      body: FeatureGateWrapper(
+        feature: PremiumFeature.totpGenerator,
+        featureGate: _featureGate,
+        showPreviewScreen: true,
+        child: _buildBody(),
+      ),
+      floatingActionButton: FeatureGateWrapper(
+        feature: PremiumFeature.totpGenerator,
+        featureGate: _featureGate,
+        child: FloatingActionButton(
+          onPressed: _addTOTPToAccount,
+          tooltip: 'Add TOTP to account',
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }

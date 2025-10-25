@@ -4,8 +4,6 @@ import 'dart:convert';
 import 'dart:io';
 import '../data/db_helper.dart';
 import '../data/vault_db_helper.dart';
-import '../models/account.dart';
-import '../models/vault_metadata.dart';
 
 /// Service for ensuring data integrity and consistency
 class DataIntegrityService {
@@ -51,6 +49,10 @@ class DataIntegrityService {
         if (kDebugMode) {
           print('Error in periodic integrity check: $e');
         }
+        final result = IntegrityCheckResult();
+        result.fatalError = 'Periodic check failed: $e';
+        result.completedAt = DateTime.now();
+        return result;
       });
     });
   }

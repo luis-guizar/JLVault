@@ -1,20 +1,80 @@
-/// Models for export system results and configuration
+/// Result of an export operation
+class ExportResult {
+  final bool success;
+  final String? filePath;
+  final String? errorMessage;
+  final int exportedCount;
+  final ExportFormat format;
+  final DateTime timestamp;
 
-/// Configuration options for export operations
+  const ExportResult({
+    required this.success,
+    this.filePath,
+    this.errorMessage,
+    this.exportedCount = 0,
+    required this.format,
+    required this.timestamp,
+  });
+
+  factory ExportResult.success({
+    required String filePath,
+    required int exportedCount,
+    required ExportFormat format,
+  }) {
+    return ExportResult(
+      success: true,
+      filePath: filePath,
+      exportedCount: exportedCount,
+      format: format,
+      timestamp: DateTime.now(),
+    );
+  }
+
+  factory ExportResult.failure({
+    required String errorMessage,
+    required ExportFormat format,
+  }) {
+    return ExportResult(
+      success: false,
+      errorMessage: errorMessage,
+      format: format,
+      timestamp: DateTime.now(),
+    );
+  }
+
+  @override
+  String toString() {
+    if (success) {
+      return 'ExportResult(success: $success, exported: $exportedCount, file: $filePath)';
+    } else {
+      return 'ExportResult(success: $success, error: $errorMessage)';
+    }
+  }
+}
+
+/// Available export formats
+enum ExportFormat {
+  json,
+  csv,
+  bitwarden,
+  lastpass,
+  onepassword,
+  simpleVaultEncrypted,
+}
+
+/// Export configuration options
 class ExportOptions {
   final List<String> vaultIds;
-  final List<String> categories;
   final ExportFormat format;
   final bool includePasswords;
   final bool includeTOTP;
   final bool includeCustomFields;
   final bool includeMetadata;
-  final String? password; // For encrypted exports
+  final String? password;
   final bool compressOutput;
 
-  ExportOptions({
+  const ExportOptions({
     required this.vaultIds,
-    this.categories = const [],
     required this.format,
     this.includePasswords = true,
     this.includeTOTP = true,
@@ -23,106 +83,22 @@ class ExportOptions {
     this.password,
     this.compressOutput = false,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'vaultIds': vaultIds,
+      'format': format.name,
+      'includePasswords': includePasswords,
+      'includeTOTP': includeTOTP,
+      'includeCustomFields': includeCustomFields,
+      'includeMetadata': includeMetadata,
+      'compressOutput': compressOutput,
+      // Note: password is intentionally excluded from JSON for security
+    };
+  }
 }
 
-/// Supported export formats
-enum ExportFormat {
-  simpleVaultEncrypted, // Native encrypted format
-  json, // Plain JSON
-  csv, // CSV format
-  bitwarden, // Bitwarden JSON format
-  lastpass, // LastPass CSV format
-  onepassword, // 1Password 1PUX format
-}
-
-/// Result of an export operation
-class ExportResult {
-  final String filePath;
-  final ExportStatistics statistics;
-  final List<ExportError> errors;
-  final ExportMetadata metadata;
-
-  ExportResult({
-    required this.filePath,
-    required this.statistics,
-    required this.errors,
-    required this.metadata,
-  });
-
-  bool get hasErrors => errors.isNotEmpty;
-  bool get isSuccessful => !hasErrors;
-}
-
-/// Statistics about the export operation
-class ExportStatistics {
-  final int totalAccounts;
-  final int exportedAccounts;
-  final int skippedAccounts;
-  final int vaultsExported;
-  final int categoriesExported;
-  final Duration processingTime;
-  final int fileSizeBytes;
-
-  ExportStatistics({
-    required this.totalAccounts,
-    required this.exportedAccounts,
-    required this.skippedAccounts,
-    required this.vaultsExported,
-    required this.categoriesExported,
-    required this.processingTime,
-    required this.fileSizeBytes,
-  });
-}
-
-/// Metadata about the exported file
-class ExportMetadata {
-  final DateTime exportedAt;
-  final String exportedBy;
-  final String appVersion;
-  final ExportFormat format;
-  final bool isEncrypted;
-  final String checksum;
-  final Map<String, dynamic> additionalData;
-
-  ExportMetadata({
-    required this.exportedAt,
-    required this.exportedBy,
-    required this.appVersion,
-    required this.format,
-    required this.isEncrypted,
-    required this.checksum,
-    this.additionalData = const {},
-  });
-}
-
-/// Error that occurred during export
-class ExportError {
-  final String message;
-  final ExportErrorType type;
-  final String? accountId;
-  final String? vaultId;
-  final Map<String, dynamic>? context;
-
-  ExportError({
-    required this.message,
-    required this.type,
-    this.accountId,
-    this.vaultId,
-    this.context,
-  });
-}
-
-/// Types of export errors
-enum ExportErrorType {
-  accessDenied,
-  encryptionError,
-  fileSystemError,
-  validationError,
-  formatError,
-  compressionError,
-}
-
-/// Data structure for exported account
+/// Represents an account prepared for export
 class ExportedAccount {
   final String id;
   final String title;
@@ -130,204 +106,109 @@ class ExportedAccount {
   final String password;
   final String? url;
   final String? notes;
-  final List<ExportedCustomField> customFields;
-  final ExportedTOTPData? totpData;
-  final DateTime? createdAt;
-  final DateTime? modifiedAt;
-  final List<String> tags;
-  final String? category;
   final String vaultId;
   final String vaultName;
-  final Map<String, dynamic> metadata;
+  final DateTime? createdAt;
+  final DateTime? modifiedAt;
+  final ExportedTOTPData? totpData;
+  final List<ExportedCustomField> customFields;
+  final List<String> tags;
+  final String? category;
+  final Map<String, dynamic>? metadata;
 
-  ExportedAccount({
+  const ExportedAccount({
     required this.id,
     required this.title,
     required this.username,
     required this.password,
     this.url,
     this.notes,
-    this.customFields = const [],
-    this.totpData,
-    this.createdAt,
-    this.modifiedAt,
-    this.tags = const [],
-    this.category,
     required this.vaultId,
     required this.vaultName,
-    this.metadata = const {},
+    this.createdAt,
+    this.modifiedAt,
+    this.totpData,
+    this.customFields = const [],
+    this.tags = const [],
+    this.category,
+    this.metadata,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'username': username,
-      'password': password,
-      'url': url,
-      'notes': notes,
-      'customFields': customFields.map((f) => f.toJson()).toList(),
-      'totpData': totpData?.toJson(),
-      'createdAt': createdAt?.toIso8601String(),
-      'modifiedAt': modifiedAt?.toIso8601String(),
-      'tags': tags,
-      'category': category,
-      'vaultId': vaultId,
-      'vaultName': vaultName,
-      'metadata': metadata,
-    };
+  /// Creates an ExportedAccount from an Account and vault name
+  factory ExportedAccount.fromAccount(
+    dynamic account,
+    String vaultName, {
+    ExportedTOTPData? totpData,
+    List<ExportedCustomField> customFields = const [],
+    List<String> tags = const [],
+    String? category,
+    Map<String, dynamic>? metadata,
+  }) {
+    return ExportedAccount(
+      id: account.id?.toString() ?? '',
+      title: account.name,
+      username: account.username,
+      password: account.password,
+      url: account.url,
+      notes: account.notes,
+      vaultId: account.vaultId,
+      vaultName: vaultName,
+      createdAt: account.createdAt,
+      modifiedAt: account.modifiedAt,
+      totpData: totpData,
+      customFields: customFields,
+      tags: tags,
+      category: category,
+      metadata: metadata,
+    );
   }
 }
 
-/// Exported custom field data
+/// TOTP data for export
+class ExportedTOTPData {
+  final String secret;
+  final String? issuer;
+  final String? accountName;
+  final int period;
+  final int digits;
+  final String algorithm;
+
+  const ExportedTOTPData({
+    required this.secret,
+    this.issuer,
+    this.accountName,
+    this.period = 30,
+    this.digits = 6,
+    this.algorithm = 'SHA1',
+  });
+
+  /// Converts TOTP data to OTP Auth URL format
+  String toOTPAuthUrl() {
+    final uri = Uri(
+      scheme: 'otpauth',
+      host: 'totp',
+      path: '/${issuer ?? 'SimpleVault'}:${accountName ?? 'Account'}',
+      queryParameters: {
+        'secret': secret,
+        'issuer': issuer ?? 'SimpleVault',
+        'algorithm': algorithm,
+        'digits': digits.toString(),
+        'period': period.toString(),
+      },
+    );
+    return uri.toString();
+  }
+}
+
+/// Custom field for export
 class ExportedCustomField {
   final String name;
   final String value;
   final String type;
 
-  ExportedCustomField({
+  const ExportedCustomField({
     required this.name,
     required this.value,
-    required this.type,
+    this.type = 'text',
   });
-
-  Map<String, dynamic> toJson() {
-    return {'name': name, 'value': value, 'type': type};
-  }
-}
-
-/// Exported TOTP data
-class ExportedTOTPData {
-  final String secret;
-  final String? issuer;
-  final String? accountName;
-  final int digits;
-  final int period;
-  final String algorithm;
-
-  ExportedTOTPData({
-    required this.secret,
-    this.issuer,
-    this.accountName,
-    this.digits = 6,
-    this.period = 30,
-    this.algorithm = 'SHA1',
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'secret': secret,
-      'issuer': issuer,
-      'accountName': accountName,
-      'digits': digits,
-      'period': period,
-      'algorithm': algorithm,
-    };
-  }
-
-  String toOTPAuthUrl() {
-    final label = accountName ?? '';
-    final issuerParam = issuer != null
-        ? '&issuer=${Uri.encodeComponent(issuer!)}'
-        : '';
-    final digitsParam = digits != 6 ? '&digits=$digits' : '';
-    final periodParam = period != 30 ? '&period=$period' : '';
-    final algorithmParam = algorithm != 'SHA1' ? '&algorithm=$algorithm' : '';
-
-    return 'otpauth://totp/$label?secret=$secret$issuerParam$digitsParam$periodParam$algorithmParam';
-  }
-}
-
-/// Filter criteria for selective export
-class ExportFilter {
-  final List<String> includeVaultIds;
-  final List<String> excludeVaultIds;
-  final List<String> includeCategories;
-  final List<String> excludeCategories;
-  final List<String> includeTags;
-  final List<String> excludeTags;
-  final DateTime? createdAfter;
-  final DateTime? createdBefore;
-  final DateTime? modifiedAfter;
-  final DateTime? modifiedBefore;
-  final bool onlyWithTOTP;
-  final bool onlyWithCustomFields;
-
-  ExportFilter({
-    this.includeVaultIds = const [],
-    this.excludeVaultIds = const [],
-    this.includeCategories = const [],
-    this.excludeCategories = const [],
-    this.includeTags = const [],
-    this.excludeTags = const [],
-    this.createdAfter,
-    this.createdBefore,
-    this.modifiedAfter,
-    this.modifiedBefore,
-    this.onlyWithTOTP = false,
-    this.onlyWithCustomFields = false,
-  });
-
-  bool shouldIncludeAccount(ExportedAccount account) {
-    // Vault filtering
-    if (includeVaultIds.isNotEmpty &&
-        !includeVaultIds.contains(account.vaultId)) {
-      return false;
-    }
-    if (excludeVaultIds.contains(account.vaultId)) {
-      return false;
-    }
-
-    // Category filtering
-    if (includeCategories.isNotEmpty &&
-        (account.category == null ||
-            !includeCategories.contains(account.category))) {
-      return false;
-    }
-    if (account.category != null &&
-        excludeCategories.contains(account.category)) {
-      return false;
-    }
-
-    // Tag filtering
-    if (includeTags.isNotEmpty &&
-        !account.tags.any((tag) => includeTags.contains(tag))) {
-      return false;
-    }
-    if (account.tags.any((tag) => excludeTags.contains(tag))) {
-      return false;
-    }
-
-    // Date filtering
-    if (createdAfter != null &&
-        (account.createdAt == null ||
-            account.createdAt!.isBefore(createdAfter!))) {
-      return false;
-    }
-    if (createdBefore != null &&
-        (account.createdAt == null ||
-            account.createdAt!.isAfter(createdBefore!))) {
-      return false;
-    }
-    if (modifiedAfter != null &&
-        (account.modifiedAt == null ||
-            account.modifiedAt!.isBefore(modifiedAfter!))) {
-      return false;
-    }
-    if (modifiedBefore != null &&
-        (account.modifiedAt == null ||
-            account.modifiedAt!.isAfter(modifiedBefore!))) {
-      return false;
-    }
-
-    // Feature filtering
-    if (onlyWithTOTP && account.totpData == null) {
-      return false;
-    }
-    if (onlyWithCustomFields && account.customFields.isEmpty) {
-      return false;
-    }
-
-    return true;
-  }
 }

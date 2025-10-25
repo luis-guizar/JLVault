@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/account.dart';
 import '../models/vault_metadata.dart';
+import '../models/premium_feature.dart';
+
 import '../data/db_helper.dart';
 import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
 import '../services/crypto_isolate_service.dart';
+import '../services/platform_crypto_service.dart';
+import '../services/crypto_test_service.dart';
 import '../services/theme_service.dart';
+import '../services/feature_gate_factory.dart';
+import '../services/license_manager_factory.dart';
+import '../utils/vault_icons.dart';
 import '../widgets/account_title.dart';
 import '../widgets/vault_switcher.dart';
+import '../widgets/feature_gate_wrapper.dart';
+import '../widgets/upgrade_prompt_dialog.dart';
 import 'add_edit_screen.dart';
 import 'vault_management_screen.dart';
 
@@ -34,6 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _searchQuery = '';
   VaultMetadata? _currentVault;
+  late final _featureGate = FeatureGateFactory.create(
+    LicenseManagerFactory.getInstance(),
+  );
 
   @override
   void initState() {
@@ -77,13 +90,42 @@ class _HomeScreenState extends State<HomeScreen> {
         throw Exception('Master password not available');
       }
 
-      // Decrypt accounts in isolates for better performance
-      final decryptedAccounts =
-          await CryptoIsolateService.decryptAccountsInIsolates(
-            encryptedAccounts,
-            _currentVault!.id,
-            masterPassword,
+      List<Account> decryptedAccounts;
+
+      // Try platform crypto first, fallback to isolate service
+      final platformAvailable = await PlatformCryptoService.isAvailable();
+      if (kDebugMode) {
+        print('Platform crypto available: $platformAvailable');
+        print('Decrypting ${encryptedAccounts.length} accounts...');
+      }
+
+      final stopwatch = Stopwatch()..start();
+
+      if (platformAvailable) {
+        decryptedAccounts = await PlatformCryptoService.decryptAccounts(
+          encryptedAccounts,
+          _currentVault!.id,
+          masterPassword,
+        );
+        if (kDebugMode) {
+          print(
+            'Platform crypto decryption took: ${stopwatch.elapsedMilliseconds}ms',
           );
+        }
+      } else {
+        // Fallback to isolate service
+        decryptedAccounts =
+            await CryptoIsolateService.decryptAccountsInIsolates(
+              encryptedAccounts,
+              _currentVault!.id,
+              masterPassword,
+            );
+        if (kDebugMode) {
+          print(
+            'Isolate service decryption took: ${stopwatch.elapsedMilliseconds}ms',
+          );
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -138,6 +180,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigateToAddEdit([Account? account]) async {
+    // Check password limit for new accounts (not when editing)
+    if (account == null) {
+      final hasUnlimited = _featureGate.canAccess(
+        PremiumFeature.unlimitedPasswords,
+      );
+      if (!hasUnlimited && _accounts.length >= 50) {
+        _showPasswordLimitDialog();
+        return;
+      }
+    }
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -151,6 +204,20 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result == true && mounted) {
       _loadAccounts();
     }
+  }
+
+  void _showPasswordLimitDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => UpgradePromptDialog(
+        feature: PremiumFeature.unlimitedPasswords,
+        featureGate: _featureGate,
+        onUpgradeSuccess: () {
+          // Refresh the UI after upgrade
+          setState(() {});
+        },
+      ),
+    );
   }
 
   void _showVaultSwitcher() {
@@ -196,6 +263,140 @@ class _HomeScreenState extends State<HomeScreen> {
       final query = _searchQuery.toLowerCase();
       return name.contains(query) || username.contains(query);
     }).toList();
+  }
+
+  Future<void> _testPlatformCrypto() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Testing crypto performance...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final results = await CryptoTestService.performanceTest(accountCount: 5);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Crypto Performance Test'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Platform Crypto Available: ${results['platform_crypto']?['available'] ?? false}',
+                  ),
+                  const SizedBox(height: 8),
+                  if (results['platform_crypto']?['success'] == true) ...[
+                    Text(
+                      'Platform Crypto Time: ${results['platform_crypto']['encrypt_decrypt_time_ms']}ms',
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  if (results['isolate_service']?['success'] == true) ...[
+                    Text(
+                      'Isolate Service Time: ${results['isolate_service']['encrypt_decrypt_time_ms']}ms',
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  if (results['performance_improvement_percent'] != null) ...[
+                    Text(
+                      'Performance Improvement: ${results['performance_improvement_percent']}%',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  if (results['platform_crypto']?['error'] != null) ...[
+                    Text(
+                      'Platform Error: ${results['platform_crypto']['error']}',
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  if (results['isolate_service']?['error'] != null) ...[
+                    Text(
+                      'Isolate Error: ${results['isolate_service']['error']}',
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Test failed: $e')));
+      }
+    }
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _searchQuery.isEmpty ? Icons.lock_open : Icons.search_off,
+            size: 80,
+            color: Colors.grey,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _searchQuery.isEmpty
+                ? 'Sin cuentas aún'
+                : 'No se encontraron cuentas',
+            style: const TextStyle(fontSize: 20, color: Colors.grey),
+          ),
+          const SizedBox(height: 10),
+          if (_searchQuery.isEmpty)
+            const Text(
+              'Toca + para agregar la primera cuenta',
+              style: TextStyle(color: Colors.grey),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountsList() {
+    return RefreshIndicator(
+      onRefresh: _loadAccounts,
+      child: ListView.builder(
+        itemCount: _filteredAccounts.length,
+        itemBuilder: (context, index) {
+          final account = _filteredAccounts[index];
+          return AccountTile(
+            account: account,
+            onDelete: () => _deleteAccount(account),
+            onEdit: () => _navigateToAddEdit(account),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -246,6 +447,19 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         elevation: 0,
         actions: [
+          // Password limit indicator
+          StreamBuilder<Map<PremiumFeature, bool>>(
+            stream: _featureGate.accessStream,
+            initialData: _featureGate.currentAccess,
+            builder: (context, snapshot) {
+              return PasswordLimitIndicator(
+                featureGate: _featureGate,
+                currentCount: _accounts.length,
+                showUpgradeButton: true,
+              );
+            },
+          ),
+          const SizedBox(width: 8),
           // Vault management - still useful in app bar for quick access
           IconButton(
             icon: const Icon(Icons.folder_open),
@@ -264,6 +478,9 @@ class _HomeScreenState extends State<HomeScreen> {
           PopupMenuButton<String>(
             onSelected: (value) {
               switch (value) {
+                case 'test_crypto':
+                  _testPlatformCrypto();
+                  break;
                 case 'about':
                   showAboutDialog(
                     context: context,
@@ -280,6 +497,16 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'test_crypto',
+                child: Row(
+                  children: [
+                    Icon(Icons.speed),
+                    SizedBox(width: 8),
+                    Text('Test Crypto Performance'),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'about',
                 child: Row(
@@ -322,49 +549,25 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _filteredAccounts.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _searchQuery.isEmpty ? Icons.lock_open : Icons.search_off,
-                    size: 80,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _searchQuery.isEmpty
-                        ? 'Sin cuentas aún'
-                        : 'No se encontraron cuentas',
-                    style: const TextStyle(fontSize: 20, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_searchQuery.isEmpty)
-                    const Text(
-                      'Toca + para agregar la primera cuenta',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                ],
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadAccounts,
-              child: ListView.builder(
-                itemCount: _filteredAccounts.length,
-                itemBuilder: (context, index) {
-                  final account = _filteredAccounts[index];
-                  return AccountTile(
-                    account: account,
-                    onDelete: () => _deleteAccount(account),
-                    onEdit: () => _navigateToAddEdit(account),
-                  );
-                },
-              ),
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _navigateToAddEdit(),
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar Cuenta'),
+          ? _buildEmptyState()
+          : _buildAccountsList(),
+      floatingActionButton: StreamBuilder<Map<PremiumFeature, bool>>(
+        stream: _featureGate.accessStream,
+        initialData: _featureGate.currentAccess,
+        builder: (context, snapshot) {
+          final hasUnlimited =
+              snapshot.data?[PremiumFeature.unlimitedPasswords] ?? false;
+          final canAddMore = hasUnlimited || _accounts.length < 50;
+
+          return FloatingActionButton.extended(
+            onPressed: canAddMore
+                ? () => _navigateToAddEdit()
+                : _showPasswordLimitDialog,
+            icon: const Icon(Icons.add),
+            label: Text(canAddMore ? 'Agregar Cuenta' : 'Límite Alcanzado'),
+            backgroundColor: canAddMore ? null : Colors.orange,
+          );
+        },
       ),
     );
   }

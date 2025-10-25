@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/vault_metadata.dart';
 import '../services/vault_manager.dart';
+import '../utils/vault_icons.dart';
 
 /// Dialog for creating a new vault with customization options
 class VaultCreationDialog extends StatefulWidget {
@@ -104,7 +104,7 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
                     height: 48,
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? _selectedColor.withOpacity(0.2)
+                          ? _selectedColor.withValues(alpha: 0.2)
                           : null,
                       border: Border.all(
                         color: isSelected ? _selectedColor : Colors.grey,
@@ -154,7 +154,7 @@ class _VaultCreationDialogState extends State<VaultCreationDialog> {
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                color: color.withOpacity(0.5),
+                                color: color.withValues(alpha: 0.5),
                                 blurRadius: 8,
                                 spreadRadius: 2,
                               ),

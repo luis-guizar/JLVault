@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
 import '../services/vault_manager.dart';
 import '../services/auth_service.dart';
+import '../utils/vault_icons.dart';
 
 /// Widget for switching between vaults with authentication
 class VaultSwitcher extends StatefulWidget {

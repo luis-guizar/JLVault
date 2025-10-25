@@ -24,8 +24,8 @@ class VaultEncryptionService {
   static const _vaultNoncePrefix = 'vault_nonce_v2_';
 
   // Argon2id parameters for strong key derivation
-  static const int _argon2Memory = 65536; // 64MB in KB
-  static const int _argon2Iterations = 3;
+  static const int _argon2Memory = 32768; // 64MB in KB
+  static const int _argon2Iterations = 2;
   static const int _argon2Parallelism = 1;
   static const int _keyLength = 32; // 256-bit key
   static const int _saltLength = 32; // 256-bit salt

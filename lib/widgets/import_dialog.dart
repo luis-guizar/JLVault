@@ -5,6 +5,7 @@ import '../models/vault_metadata.dart';
 import '../services/import_service.dart';
 import '../services/vault_manager.dart';
 import '../data/db_helper.dart';
+import '../utils/vault_icons.dart';
 
 /// Dialog for importing passwords with vault selection
 class ImportDialog extends StatefulWidget {

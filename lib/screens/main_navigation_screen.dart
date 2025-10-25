@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import '../models/premium_feature.dart';
 import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
 import '../services/theme_service.dart';
+import '../services/feature_gate_factory.dart';
+import '../services/license_manager_factory.dart';
 import '../widgets/responsive_navigation.dart';
 import '../widgets/animated_widgets.dart';
+import '../widgets/upgrade_prompt_dialog.dart';
 import '../services/animation_service.dart';
 import 'home_screen.dart';
 import 'totp_management_screen.dart';
 import 'security_dashboard_screen.dart';
+import 'data_management_screen.dart';
 import 'p2p_sync_screen.dart';
 import 'settings_screen.dart';
 
@@ -34,6 +39,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
   late PageController _pageController;
+  late final _featureGate = FeatureGateFactory.create(
+    LicenseManagerFactory.getInstance(),
+  );
 
   @override
   void initState() {
@@ -48,6 +56,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   }
 
   void _onNavigationChanged(int index) {
+    // Check if the destination requires premium access
+    final requiredFeature = _getRequiredFeatureForIndex(index);
+    if (requiredFeature != null && !_featureGate.canAccess(requiredFeature)) {
+      _showUpgradePrompt(requiredFeature);
+      return;
+    }
+
     if (index != _currentIndex) {
       setState(() {
         _currentIndex = index;
@@ -59,6 +74,35 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         curve: Curves.easeInOut,
       );
     }
+  }
+
+  PremiumFeature? _getRequiredFeatureForIndex(int index) {
+    switch (index) {
+      case 1: // TOTP
+        return PremiumFeature.totpGenerator;
+      case 2: // Security Dashboard
+        return PremiumFeature.securityHealth;
+      case 3: // Data Management (Import/Export)
+        return PremiumFeature.importExport;
+      case 4: // P2P Sync
+        return PremiumFeature.p2pSync;
+      default:
+        return null; // Home and Settings are free
+    }
+  }
+
+  void _showUpgradePrompt(PremiumFeature feature) {
+    showDialog(
+      context: context,
+      builder: (context) => UpgradePromptDialog(
+        feature: feature,
+        featureGate: _featureGate,
+        onUpgradeSuccess: () {
+          // Refresh the UI after upgrade
+          setState(() {});
+        },
+      ),
+    );
   }
 
   void _onPageChanged(int index) {
@@ -88,8 +132,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           vaultId: null, // Will use active vault
         );
       case 3:
-        return const P2PSyncScreen();
+        return DataManagementScreen(vaultManager: widget.vaultManager);
       case 4:
+        return const P2PSyncScreen();
+      case 5:
         return SettingsScreen(themeService: widget.themeService);
       default:
         return HomeScreen(
@@ -140,6 +186,7 @@ class NavigationHelper {
   static const String homeRoute = '/home';
   static const String totpRoute = '/totp';
   static const String securityRoute = '/security';
+  static const String dataRoute = '/data';
   static const String syncRoute = '/sync';
   static const String settingsRoute = '/settings';
 
@@ -147,16 +194,18 @@ class NavigationHelper {
     homeRoute: 0,
     totpRoute: 1,
     securityRoute: 2,
-    syncRoute: 3,
-    settingsRoute: 4,
+    dataRoute: 3,
+    syncRoute: 4,
+    settingsRoute: 5,
   };
 
   static final Map<int, String> _indexToRoute = {
     0: homeRoute,
     1: totpRoute,
     2: securityRoute,
-    3: syncRoute,
-    4: settingsRoute,
+    3: dataRoute,
+    4: syncRoute,
+    5: settingsRoute,
   };
 
   static int getIndexFromRoute(String route) {
@@ -172,6 +221,8 @@ class NavigationHelper {
     final index = getIndexFromRoute(route);
     // This would be implemented with a state management solution
     // For now, we'll use a simple approach
+    // TODO: Implement navigation logic using index
+    debugPrint('Navigate to route: $route (index: $index)');
   }
 
   /// Get appropriate app bar for each screen
@@ -188,8 +239,10 @@ class NavigationHelper {
       case 2:
         return AppBar(title: const Text('Panel de Seguridad'), elevation: 0);
       case 3:
-        return AppBar(title: const Text('Sincronización P2P'), elevation: 0);
+        return AppBar(title: const Text('Gestión de Datos'), elevation: 0);
       case 4:
+        return AppBar(title: const Text('Sincronización P2P'), elevation: 0);
+      case 5:
         return AppBar(
           title: const Text('Configuración'),
           elevation: 0,

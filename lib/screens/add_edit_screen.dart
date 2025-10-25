@@ -7,6 +7,7 @@ import '../services/password_generator_service.dart';
 import '../services/vault_manager.dart';
 import '../services/vault_encryption_service.dart';
 import '../services/crypto_isolate_service.dart';
+import '../services/platform_crypto_service.dart';
 import '../widgets/password_generator_dialog.dart';
 import '../widgets/password_strength_indicator.dart';
 import '../screens/totp_setup_screen.dart';
@@ -84,13 +85,23 @@ class _AddEditScreenState extends State<AddEditScreen> {
       // Get master password for isolate operation
       final masterPassword = VaultEncryptionService.currentMasterPassword;
       if (masterPassword != null) {
-        // Decrypt using isolate for better performance
-        final decryptedAccount =
-            await CryptoIsolateService.decryptAccountInIsolate(
-              account,
-              account.vaultId,
-              masterPassword,
-            );
+        Account decryptedAccount;
+
+        // Try platform crypto first, fallback to isolate service
+        if (await PlatformCryptoService.isAvailable()) {
+          decryptedAccount = await PlatformCryptoService.decryptAccount(
+            account,
+            account.vaultId,
+            masterPassword,
+          );
+        } else {
+          // Fallback to isolate service
+          decryptedAccount = await CryptoIsolateService.decryptAccountInIsolate(
+            account,
+            account.vaultId,
+            masterPassword,
+          );
+        }
         _usernameController.text = decryptedAccount.username;
         _passwordController.text = decryptedAccount.password;
         _totpConfig = decryptedAccount.totpConfig;
@@ -158,14 +169,28 @@ class _AddEditScreenState extends State<AddEditScreen> {
       // Get master password for isolate operation
       final masterPassword = VaultEncryptionService.currentMasterPassword;
 
-      // Encrypt the account data using isolate for better performance
-      final encryptedAccount = masterPassword != null
-          ? await CryptoIsolateService.encryptAccountInIsolate(
-              account,
-              _currentVaultId!,
-              masterPassword,
-            )
-          : await VaultEncryptionService.encryptAccount(account);
+      // Encrypt the account data using platform crypto for better performance
+      Account encryptedAccount;
+
+      if (masterPassword != null) {
+        // Try platform crypto first, fallback to isolate service
+        if (await PlatformCryptoService.isAvailable()) {
+          encryptedAccount = await PlatformCryptoService.encryptAccount(
+            account,
+            _currentVaultId!,
+            masterPassword,
+          );
+        } else {
+          // Fallback to isolate service
+          encryptedAccount = await CryptoIsolateService.encryptAccountInIsolate(
+            account,
+            _currentVaultId!,
+            masterPassword,
+          );
+        }
+      } else {
+        encryptedAccount = await VaultEncryptionService.encryptAccount(account);
+      }
 
       if (_isEditing) {
         await DBHelper.update(encryptedAccount);

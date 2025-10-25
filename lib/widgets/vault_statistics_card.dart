@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
+import '../utils/vault_icons.dart';
 
 /// Card widget displaying vault statistics
 class VaultStatisticsCard extends StatelessWidget {

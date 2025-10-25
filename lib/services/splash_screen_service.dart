@@ -1,7 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'app_initialization_service.dart';
-import 'vault_manager.dart';
 import '../data/vault_db_helper.dart';
 
 /// Service for managing splash screen and preloading essential data

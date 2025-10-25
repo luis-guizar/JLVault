@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'security_audit_service.dart';
+import 'security_monitoring_service.dart';
 
 /// Enhanced authentication service with security features
 class EnhancedAuthService {
@@ -123,18 +125,71 @@ class EnhancedAuthService {
 
       if (authenticated) {
         await _handleSuccessfulAuth();
+
+        // Record successful authentication event
+        await SecurityMonitoringService.recordSecurityEvent(
+          eventType: SecurityEventType.authentication,
+          description: 'Successful authentication',
+          severity: SecuritySeverity.low,
+          metadata: {
+            'success': true,
+            'biometricOnly': biometricOnly,
+            'requireRecentAuth': requireRecentAuth,
+          },
+        );
+
         return AuthResult.success();
       } else {
         await _handleFailedAuth('User cancelled or authentication failed');
+
+        // Record failed authentication event
+        await SecurityMonitoringService.recordSecurityEvent(
+          eventType: SecurityEventType.authentication,
+          description: 'Authentication failed - user cancelled',
+          severity: SecuritySeverity.medium,
+          metadata: {
+            'success': false,
+            'reason': 'user_cancelled',
+            'biometricOnly': biometricOnly,
+          },
+        );
+
         return AuthResult.failure(reason: 'Authentication failed');
       }
     } on PlatformException catch (e) {
       errorMessage = _handlePlatformException(e);
       await _handleFailedAuth(errorMessage);
+
+      // Record platform exception authentication event
+      await SecurityMonitoringService.recordSecurityEvent(
+        eventType: SecurityEventType.authentication,
+        description: 'Authentication failed - platform exception',
+        severity: SecuritySeverity.high,
+        metadata: {
+          'success': false,
+          'reason': 'platform_exception',
+          'errorCode': e.code,
+          'errorMessage': e.message,
+        },
+      );
+
       return AuthResult.failure(reason: errorMessage);
     } catch (e) {
       errorMessage = 'Unexpected authentication error: ${e.toString()}';
       await _handleFailedAuth(errorMessage);
+
+      // Record unexpected error authentication event
+      await SecurityMonitoringService.recordSecurityEvent(
+        eventType: SecurityEventType.authentication,
+        description: 'Authentication failed - unexpected error',
+        severity: SecuritySeverity.high,
+        metadata: {
+          'success': false,
+          'reason': 'unexpected_error',
+          'error': e.toString(),
+        },
+      );
+
       return AuthResult.failure(reason: errorMessage);
     }
   }
@@ -158,12 +213,37 @@ class EnhancedAuthService {
         'operation': operation,
         'timestamp': DateTime.now().toIso8601String(),
       });
+
+      // Record successful sensitive operation authentication
+      await SecurityMonitoringService.recordSecurityEvent(
+        eventType: SecurityEventType.authentication,
+        description: 'Successful sensitive operation authentication',
+        severity: SecuritySeverity.medium,
+        metadata: {
+          'success': true,
+          'operation': operation,
+          'sensitiveOperation': true,
+        },
+      );
     } else {
       await _logSecurityEvent('sensitive_operation_auth_failed', {
         'operation': operation,
         'reason': result.errorMessage,
         'timestamp': DateTime.now().toIso8601String(),
       });
+
+      // Record failed sensitive operation authentication
+      await SecurityMonitoringService.recordSecurityEvent(
+        eventType: SecurityEventType.authentication,
+        description: 'Failed sensitive operation authentication',
+        severity: SecuritySeverity.high,
+        metadata: {
+          'success': false,
+          'operation': operation,
+          'reason': result.errorMessage,
+          'sensitiveOperation': true,
+        },
+      );
     }
 
     return result;

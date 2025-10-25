@@ -99,7 +99,7 @@ class JsonExportFormatter implements ExportFormatter {
       accountData['metadata'] = {
         'createdAt': account.createdAt?.toIso8601String(),
         'modifiedAt': account.modifiedAt?.toIso8601String(),
-        ...account.metadata,
+        ...?account.metadata,
       };
     }
 

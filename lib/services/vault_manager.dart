@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
 import '../data/vault_db_helper.dart';
+import 'enhanced_auth_service.dart';
 
 /// Abstract interface for vault management operations
 abstract class VaultManager {
@@ -139,6 +140,19 @@ class DefaultVaultManager implements VaultManager {
     final vault = await getVaultById(vaultId);
     if (vault == null) {
       throw VaultException('Vault with ID $vaultId not found');
+    }
+
+    // Require biometric authentication for vault deletion
+    final authResult =
+        await EnhancedAuthService.authenticateForSensitiveOperation(
+          operation: 'vault_deletion',
+          customReason: 'Authenticate to delete vault "${vault.name}"',
+        );
+
+    if (!authResult.isSuccess) {
+      throw VaultException(
+        'Authentication required to delete vault: ${authResult.errorMessage ?? "Authentication failed"}',
+      );
     }
 
     // If deleting active vault, switch to another vault

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/vault_metadata.dart';
 import '../services/vault_manager.dart';
 import '../services/enhanced_auth_service.dart';
+import '../utils/vault_icons.dart';
 
 /// Dialog for confirming vault deletion with security measures
 class VaultDeletionDialog extends StatefulWidget {
